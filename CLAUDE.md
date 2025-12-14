@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2025-12-14
 
 ## Active Technologies
+- N/A (API client only) (002-fix-search-stale-results)
 
 - TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod, native fetch
 
@@ -93,10 +94,12 @@ See `.specify/memory/constitution.md` for the authoritative reference.
 
 ### Search Entities (POST /entities/search)
 ```json
-{ "data": { "type": "feature", "statuses": [{"name": "Released"}], "owners": [{"email": "..."}], "parent": {"id": "..."} } }
+{ "data": { "type": "feature", "name": "Search text", "statuses": [{"name": "Released"}], "owners": [{"email": "..."}], "parent": {"id": "..."} } }
 ```
-**Note**: REQUIRES `data` wrapper. Filters (`statuses`, `owners`, `parent`) are direct properties, NOT a `filter` wrapper.
+**Note**: REQUIRES `data` wrapper. Filters (`name`, `statuses`, `owners`, `parent`) are direct properties, NOT a `filter` wrapper.
 The official docs show a `filter` property but that does NOT work - use the format above.
+
+**Name Search** (verified 2025-12-14): The `name` parameter enables server-side text filtering with partial, case-insensitive matching.
 
 ### Set Relationship (PUT /entities/{id}/relationships/{type})
 ```json
@@ -110,14 +113,10 @@ DELETE /entities/{id}/relationships/{type}/{targetId}
 Path includes `targetId` - no request body.
 
 ## Recent Changes
+- 002-fix-search-stale-results: Added TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod, native fetch
 
 - 2025-12-14: Fixed search filters - use `statuses`, `owners`, `parent` as direct properties (NOT `filter` wrapper)
 - 2025-12-14: Fixed error handling to parse ProductBoard's `{ errors: [...] }` format
-- 2025-12-14: Fixed all API request body structures per official docs (create, update, search, relationships)
-- 2025-12-14: Fixed API response mapping for nested `fields` structure
-- 2025-12-14: Added support for `teams` array (API v2 returns multiple teams)
-- 2025-12-14: Added token trimming to handle whitespace issues
-- 001-productboard-mcp: Initial implementation with TypeScript 5.x + @modelcontextprotocol/sdk
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

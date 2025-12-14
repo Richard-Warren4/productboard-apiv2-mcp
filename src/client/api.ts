@@ -233,11 +233,15 @@ export class ProductBoardClient {
    * Search features with optional filters
    *
    * Uses the POST /entities/search endpoint.
-   * API expects: { data: { type, statuses?, owners?, parent? } }
+   * API expects: { data: { type, name?, statuses?, owners?, parent? } }
    * (verified by live testing 2025-12-14 with ProductBoard examples)
    *
    * NOTE: The official docs show a `filter` property but that does NOT work.
    * Filters are passed as direct properties in the data object.
+   *
+   * @example
+   * // Search by name (partial, case-insensitive matching)
+   * searchFeatures({ name: 'Store Web App' })
    *
    * @example
    * // Search by status
@@ -250,8 +254,13 @@ export class ProductBoardClient {
    * @example
    * // Search by parent feature
    * searchFeatures({ parent: { id: 'feature-uuid' } })
+   *
+   * @example
+   * // Combined search: name + status
+   * searchFeatures({ name: 'MVP', statuses: [{ name: 'In Progress' }] })
    */
   async searchFeatures(params?: {
+    name?: string;
     statuses?: Array<{ name: string } | { id: string }>;
     owners?: Array<{ email: string } | { id: string }>;
     parent?: { id: string };
@@ -259,6 +268,7 @@ export class ProductBoardClient {
   }): Promise<PaginatedResponse<Feature>> {
     const data: {
       type: string;
+      name?: string;
       statuses?: Array<{ name: string } | { id: string }>;
       owners?: Array<{ email: string } | { id: string }>;
       parent?: { id: string };
@@ -267,6 +277,9 @@ export class ProductBoardClient {
     };
 
     // Add optional filters
+    if (params?.name) {
+      data.name = params.name;
+    }
     if (params?.statuses && params.statuses.length > 0) {
       data.statuses = params.statuses;
     }

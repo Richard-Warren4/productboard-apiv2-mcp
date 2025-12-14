@@ -87,12 +87,19 @@ export function registerSearchTools(server: McpServer, client: ProductBoardClien
 
         // Build search filters for API
         const searchParams: {
+          name?: string;
           statuses?: Array<{ name: string }>;
           owners?: Array<{ email: string }>;
           pageCursor?: string;
         } = {};
 
         const appliedFilters: Record<string, string | string[]> = {};
+
+        // Add name filter (server-side filtering via API)
+        if (input.query) {
+          searchParams.name = input.query;
+          appliedFilters.query = input.query;
+        }
 
         // Add status filter
         if (args.statusNames && Array.isArray(args.statusNames) && args.statusNames.length > 0) {
@@ -110,32 +117,13 @@ export function registerSearchTools(server: McpServer, client: ProductBoardClien
           searchParams.pageCursor = input.pageCursor;
         }
 
-        // Use searchFeatures API if we have API-level filters
-        let features: Feature[];
-        let nextCursor: string | undefined;
-        let hasMore: boolean;
+        // Always use searchFeatures API - supports name, status, and owner filtering server-side
+        const response = await client.searchFeatures(searchParams);
+        let features: Feature[] = response.data;
+        const nextCursor = extractCursor(response.links.next);
+        const hasMore = hasNextPage(response);
 
-        if (searchParams.statuses || searchParams.owners) {
-          // Use search API with filters
-          const response = await client.searchFeatures(searchParams);
-          features = response.data;
-          nextCursor = extractCursor(response.links.next);
-          hasMore = hasNextPage(response);
-        } else {
-          // Fall back to listFeatures for basic queries
-          const response = await client.listFeatures({ pageCursor: input.pageCursor });
-          features = response.data;
-          nextCursor = extractCursor(response.links.next);
-          hasMore = hasNextPage(response);
-        }
-
-        // Apply client-side filters for query and team (not supported by API)
-        if (input.query) {
-          const queryLower = input.query.toLowerCase();
-          features = features.filter((f) => f.fields.name.toLowerCase().includes(queryLower));
-          appliedFilters.query = input.query;
-        }
-
+        // Apply client-side filters for team (not supported by API)
         if (input.teamId) {
           features = features.filter((f) => {
             if (f.fields.teams && f.fields.teams.length > 0) {

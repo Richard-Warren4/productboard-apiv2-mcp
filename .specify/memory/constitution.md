@@ -220,6 +220,7 @@ Alternative patch format:
 {
   "data": {
     "type": "feature",
+    "name": "Search text",
     "statuses": [{ "name": "Released" }],
     "owners": [{ "email": "john@example.com" }],
     "parent": { "id": "parent-feature-id" }
@@ -228,8 +229,14 @@ Alternative patch format:
 ```
 **Note**: REQUIRES `data` wrapper (verified by live testing 2025-12-14).
 **IMPORTANT**: The official docs show a `filter` property but that does NOT work.
-Filters are passed as direct properties (`statuses`, `owners`, `parent`) in the data object.
+Filters are passed as direct properties (`name`, `statuses`, `owners`, `parent`) in the data object.
 All filter properties are optional.
+
+**Name Search** (verified 2025-12-14): The `name` parameter enables server-side text filtering:
+- Supports partial matching (case-insensitive)
+- Returns all matching features across all pages
+- Example: `"name": "Store Web"` matches "Store Web App MVP", "Store Web App MMP", etc.
+
 **Reference**: https://developer.productboard.com/v2.0.0/reference/searchentities
 
 #### Set Relationship (PUT /entities/{id}/relationships/{type})
