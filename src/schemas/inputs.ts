@@ -108,6 +108,7 @@ export const RemoveRelationshipInputSchema = z.object({
   relationshipType: z
     .enum(['component', 'product', 'initiative', 'parent'])
     .describe('Type of relationship to remove'),
+  targetId: z.string().describe('Target entity ID to unlink'),
 });
 
 // =============================================================================

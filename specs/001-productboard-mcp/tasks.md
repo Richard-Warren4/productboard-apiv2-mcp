@@ -101,13 +101,13 @@ Single project structure per plan.md:
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Implement pb_create_feature tool in src/tools/features.ts
-- [ ] T029 [US3] Validate required fields (name) and optional fields
-- [ ] T030 [US3] Implement team assignment by ID or name lookup
-- [ ] T031 [US3] Implement status assignment with config validation
-- [ ] T032 [US3] Add richtext validation for description field
-- [ ] T033 [US3] Register pb_create_feature tool in src/index.ts
-- [ ] T034 [US3] Return created feature details with confirmation message
+- [x] T028 [US3] Implement pb_create_feature tool in src/tools/features.ts
+- [x] T029 [US3] Validate required fields (name) and optional fields
+- [x] T030 [US3] Implement team assignment by ID or name lookup
+- [x] T031 [US3] Implement status assignment with config validation
+- [x] T032 [US3] Add richtext validation for description field
+- [x] T033 [US3] Register pb_create_feature tool in src/index.ts
+- [x] T034 [US3] Return created feature details with confirmation message
 
 **Checkpoint**: US3 complete - can create features with team and status
 
@@ -121,12 +121,12 @@ Single project structure per plan.md:
 
 ### Implementation for User Story 4
 
-- [ ] T035 [US4] Implement pb_update_feature tool in src/tools/features.ts
-- [ ] T036 [US4] Support partial updates (only provided fields changed)
-- [ ] T037 [US4] Implement owner reassignment by ID or email
-- [ ] T038 [US4] Implement team reassignment by ID or name
-- [ ] T039 [US4] Register pb_update_feature tool in src/index.ts
-- [ ] T040 [US4] Return updated feature with list of changed fields
+- [x] T035 [US4] Implement pb_update_feature tool in src/tools/features.ts
+- [x] T036 [US4] Support partial updates (only provided fields changed)
+- [x] T037 [US4] Implement owner reassignment by ID or email
+- [x] T038 [US4] Implement team reassignment by ID or name
+- [x] T039 [US4] Register pb_update_feature tool in src/index.ts
+- [x] T040 [US4] Return updated feature with list of changed fields
 
 **Checkpoint**: US4 complete - full feature CRUD (except delete, out of scope)
 
@@ -140,11 +140,11 @@ Single project structure per plan.md:
 
 ### Implementation for User Story 5
 
-- [ ] T041 [US5] Implement pb_search_features tool in src/tools/search.ts
-- [ ] T042 [US5] Implement name-based search (contains matching)
-- [ ] T043 [US5] Combine search with filters (team, status, component)
-- [ ] T044 [US5] Register pb_search_features tool in src/index.ts
-- [ ] T045 [US5] Return search results with applied filters displayed
+- [x] T041 [US5] Implement pb_search_features tool in src/tools/search.ts
+- [x] T042 [US5] Implement name-based search (contains matching)
+- [x] T043 [US5] Combine search with filters (team, status, component)
+- [x] T044 [US5] Register pb_search_features tool in src/index.ts
+- [x] T045 [US5] Return search results with applied filters displayed
 
 **Checkpoint**: US5 complete - efficient feature discovery
 
@@ -158,11 +158,11 @@ Single project structure per plan.md:
 
 ### Implementation for User Story 6
 
-- [ ] T046 [US6] Implement pb_get_relationships tool in src/tools/relationships.ts
-- [ ] T047 [US6] Implement pb_set_relationship tool in src/tools/relationships.ts
-- [ ] T048 [US6] Implement pb_remove_relationship tool in src/tools/relationships.ts
-- [ ] T049 [US6] Support relationship types: component, product, initiative, parent
-- [ ] T050 [US6] Register relationship tools in src/index.ts
+- [x] T046 [US6] Implement pb_get_relationships tool in src/tools/relationships.ts
+- [x] T047 [US6] Implement pb_set_relationship tool in src/tools/relationships.ts
+- [x] T048 [US6] Implement pb_remove_relationship tool in src/tools/relationships.ts
+- [x] T049 [US6] Support relationship types: component, product, initiative, parent
+- [x] T050 [US6] Register relationship tools in src/index.ts
 
 **Checkpoint**: US6 complete - relationship management functional
 
@@ -176,12 +176,12 @@ Single project structure per plan.md:
 
 ### Implementation for User Story 7
 
-- [ ] T051 [US7] Create Claude Desktop setup documentation in docs/claude-desktop.md
-- [ ] T052 [US7] Create Claude Code setup documentation in docs/claude-code.md
-- [ ] T053 [US7] Add MCP server configuration to project's .claude/settings.json
-- [ ] T054 [US7] Create example slash command for listing features in .claude/commands/pb-features.md
-- [ ] T055 [US7] Create example slash command for feature details in .claude/commands/pb-detail.md
-- [ ] T056 [US7] Create ProductBoard workflow skills guide in docs/skills/productboard.md
+- [x] T051 [US7] Create Claude Desktop setup documentation in docs/claude-desktop.md
+- [x] T052 [US7] Create Claude Code setup documentation in docs/claude-code.md
+- [x] T053 [US7] Add MCP server configuration to project's .claude/settings.json
+- [x] T054 [US7] Create example slash command for listing features in .claude/commands/pb-features.md
+- [x] T055 [US7] Create example slash command for feature details in .claude/commands/pb-detail.md
+- [x] T056 [US7] Create ProductBoard workflow skills guide in docs/skills/productboard.md
 
 **Checkpoint**: US7 complete - MCP usable within this project
 
@@ -191,11 +191,11 @@ Single project structure per plan.md:
 
 **Purpose**: Configuration tools needed across multiple user stories
 
-- [ ] T057 Implement pb_get_config tool in src/tools/config.ts
-- [ ] T058 Implement pb_list_products tool in src/tools/config.ts
-- [ ] T059 Implement pb_list_components tool in src/tools/config.ts
-- [ ] T060 Register configuration tools in src/index.ts
-- [ ] T061 Cache configuration data to reduce API calls
+- [x] T057 Implement pb_get_config tool in src/tools/config.ts
+- [x] T058 Implement pb_list_products tool in src/tools/config.ts
+- [x] T059 Implement pb_list_components tool in src/tools/config.ts
+- [x] T060 Register configuration tools in src/index.ts
+- [x] T061 Cache configuration data to reduce API calls
 
 **Checkpoint**: Configuration discovery complete - tools can validate inputs
 
@@ -205,11 +205,11 @@ Single project structure per plan.md:
 
 **Purpose**: Subfeature CRUD operations (supports US1-US4 for subfeatures)
 
-- [ ] T062 Implement pb_list_subfeatures tool in src/tools/subfeatures.ts
-- [ ] T063 Implement pb_get_subfeature tool in src/tools/subfeatures.ts
-- [ ] T064 Implement pb_create_subfeature tool in src/tools/subfeatures.ts
-- [ ] T065 Implement pb_update_subfeature tool in src/tools/subfeatures.ts
-- [ ] T066 Register subfeature tools in src/index.ts
+- [x] T062 Implement pb_list_subfeatures tool in src/tools/subfeatures.ts
+- [x] T063 Implement pb_get_subfeature tool in src/tools/subfeatures.ts
+- [x] T064 Implement pb_create_subfeature tool in src/tools/subfeatures.ts
+- [x] T065 Implement pb_update_subfeature tool in src/tools/subfeatures.ts
+- [x] T066 Register subfeature tools in src/index.ts
 
 **Checkpoint**: Subfeature operations complete
 
@@ -219,11 +219,11 @@ Single project structure per plan.md:
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T067 [P] Add JSDoc comments to all MCP tools
-- [ ] T068 [P] Create README.md with project overview and quick start
-- [ ] T069 Run quickstart.md validation (install and configure in fresh environment)
-- [ ] T070 Add beta API disclaimer to all documentation
-- [ ] T071 Review and improve error messages across all tools
+- [x] T067 [P] Add JSDoc comments to all MCP tools
+- [x] T068 [P] Create README.md with project overview and quick start
+- [x] T069 Run quickstart.md validation (install and configure in fresh environment)
+- [x] T070 Add beta API disclaimer to all documentation
+- [x] T071 Review and improve error messages across all tools
 
 ---
 

@@ -14,6 +14,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createClient, ProductBoardClient } from './client/api.js';
 import { ProductBoardError } from './client/errors.js';
 import { registerFeatureTools } from './tools/features.js';
+import { registerSearchTools } from './tools/search.js';
+import { registerRelationshipTools } from './tools/relationships.js';
+import { registerConfigTools } from './tools/config.js';
+import { registerSubfeatureTools } from './tools/subfeatures.js';
 
 // Server metadata
 const SERVER_NAME = 'productboard-mcp';
@@ -55,13 +59,12 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Register tools
+  // Register all tools
   registerFeatureTools(server, client);
-  // TODO: Register additional tool modules as they are implemented
-  // registerSubfeatureTools(server, client);
-  // registerRelationshipTools(server, client);
-  // registerSearchTools(server, client);
-  // registerConfigTools(server, client);
+  registerSearchTools(server, client);
+  registerRelationshipTools(server, client);
+  registerConfigTools(server, client);
+  registerSubfeatureTools(server, client);
 
   // Connect to transport
   const transport = new StdioServerTransport();
