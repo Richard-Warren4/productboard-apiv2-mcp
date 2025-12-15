@@ -1,26 +1,28 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.0 → 1.2.0
-Bump rationale: MINOR - Added new principle (V: Documentation-Verified Implementation) requiring all API
-implementations to be verified against official ProductBoard developer documentation.
+Version change: 1.2.2 → 1.3.0
+Bump rationale: MINOR - Added new principle (VI: MCP Integration Testing) requiring all changes
+to be tested by actually using the MCP server from an AI assistant's perspective.
 
 Modified principles: None
 
 Added sections:
-- Principle V: Documentation-Verified Implementation (new principle requiring verification against official docs)
-- Added API Request Body Structures section with verified correct formats
+- Principle VI: MCP Integration Testing (new principle requiring real MCP invocation testing)
+- Updated Development Workflow with Pre-Merge Testing Process
+- References specs/mcp-test-checklist.md for test scenarios
 
 Removed sections: None
 
 Templates requiring updates:
-- .specify/templates/plan-template.md: ✅ reviewed - no updates required (Constitution Check is generic)
+- .specify/templates/plan-template.md: ✅ reviewed - no updates required
 - .specify/templates/spec-template.md: ✅ reviewed - no updates required
 - .specify/templates/tasks-template.md: ✅ reviewed - no updates required
 - .specify/templates/checklist-template.md: ✅ reviewed - no updates required
 - .specify/templates/agent-file-template.md: ✅ reviewed - no updates required
 
-Follow-up TODOs: None
+Follow-up TODOs:
+- Created specs/mcp-test-checklist.md with comprehensive test scenarios
 -->
 
 # ProductBoard API v2 MCP Server Constitution
@@ -100,6 +102,28 @@ All API implementations MUST be verified against the official ProductBoard devel
 **Rationale**: The official ProductBoard API documentation is the authoritative source for request/response
 formats. Implementations derived from assumptions or third-party sources have historically introduced bugs.
 Verification against official docs prevents these issues and ensures API calls work correctly.
+
+### VI. MCP Integration Testing
+
+All changes MUST be tested by actually using the MCP server from an AI assistant's perspective.
+
+- After building, the MCP MUST be tested by invoking tools as a user/AI would
+- Test scenarios MUST include both happy path and error conditions
+- Status names, field values, and entity types MUST be tested with actual workspace data
+- The test checklist in `specs/mcp-test-checklist.md` MUST be executed before merging
+- Edge cases discovered in production MUST be added to the test checklist
+- Unit tests alone are NOT sufficient - real MCP invocation is REQUIRED
+
+**Required Test Categories**:
+1. **Entity Operations**: Create, read, update, list, search for each entity type
+2. **Relationship Operations**: Create links, get relationships, remove relationships
+3. **Configuration Operations**: Get config for all types and specific types
+4. **Error Handling**: Invalid status names, missing required fields, non-existent IDs
+5. **Pagination**: Multi-page results with cursor handling
+
+**Rationale**: Unit tests verify code logic but not real-world behavior. The bugs discovered in production
+(case-sensitive status names, single entity config response structure) would have been caught by actually
+using the MCP. Testing from the AI assistant's perspective ensures the MCP works as intended.
 
 ## API Integration Standards
 
@@ -264,7 +288,16 @@ All filter properties are optional.
 This section defines the required development practices for contributions.
 
 - **Branch Strategy**: Feature branches from `main`; PRs required for all changes
-- **Testing Requirements**: Unit tests for all tools; integration tests against ProductBoard sandbox
+- **Testing Requirements**:
+  1. Unit tests for all tools (`npm test`)
+  2. Live integration tests against ProductBoard (`npm run test:live`)
+  3. **MCP Integration Tests**: Execute `specs/mcp-test-checklist.md` using real MCP invocation
+- **Pre-Merge Testing Process**:
+  1. Run `npm run build` - ensure clean compilation
+  2. Run `npm test` - all unit and live tests must pass
+  3. Configure MCP in Claude Code or terminal (`claude mcp add`)
+  4. Execute MCP test checklist scenarios from `specs/mcp-test-checklist.md`
+  5. Verify all test scenarios pass before committing
 - **Code Review**: All PRs MUST be reviewed before merge
 - **Documentation**: Each MCP tool MUST have JSDoc comments describing parameters and behavior
 - **Commit Messages**: Conventional commits format (`feat:`, `fix:`, `docs:`, etc.)
@@ -284,4 +317,4 @@ This constitution is the authoritative source for development standards in this 
 3. Update version number according to semantic versioning
 4. Update any dependent templates or documentation
 
-**Version**: 1.2.2 | **Ratified**: 2025-12-12 | **Last Amended**: 2025-12-14
+**Version**: 1.3.0 | **Ratified**: 2025-12-12 | **Last Amended**: 2025-12-15

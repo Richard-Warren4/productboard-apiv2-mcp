@@ -96,6 +96,8 @@ npm run test:watch # Run tests in watch mode
 
 ## Testing
 
+### Automated Tests
+
 Live integration tests require the `PRODUCTBOARD_API_TOKEN` environment variable.
 
 **Set up for testing:**
@@ -107,9 +109,45 @@ source ~/.zshrc
 # Verify token is available
 echo $PRODUCTBOARD_API_TOKEN  # Should start with 'eyJ...'
 
-# Run live tests
+# Run all tests
+npm test
+
+# Run live API tests only
 npm run test:live
 ```
+
+### MCP Integration Testing (REQUIRED)
+
+**Unit tests alone are NOT sufficient.** Before merging any changes, you MUST test the MCP by actually using it from Claude Code or another MCP client.
+
+**Quick Setup:**
+```bash
+# Build the project
+npm run build
+
+# Add to Claude Code (terminal)
+claude mcp add --transport stdio productboard \
+  --env PRODUCTBOARD_API_TOKEN=$PRODUCTBOARD_API_TOKEN \
+  -- node /path/to/dist/index.js
+
+# Verify connection
+/mcp
+```
+
+**Quick Smoke Test (minimum 5 tests):**
+1. `pb_get_config(entityType: "feature")` - Single entity config works
+2. `pb_search_features(statusNames: ["In progress"])` - Search with exact status
+3. `pb_entity_types()` - Lists all entity types
+4. `pb_get_relationships(featureId: "[id]")` - Gets relationships
+5. `pb_create_relationship(entityId, "link", targetId)` - Creates link
+
+**Full Test Checklist:** See `specs/mcp-test-checklist.md` for comprehensive test scenarios.
+
+**Known Edge Cases:**
+- Status names are **case-sensitive**: "In progress" works, "In Progress" fails
+- Config for single entity type returns object, not array
+- `initiative` entity type is NOT supported by API v2
+- `pageSize` parameter is not supported (API returns 100 items/page)
 
 ## Code Style
 
