@@ -202,7 +202,9 @@ export function registerConfigTools(server: McpServer, client: ProductBoardClien
         }
 
         // Format each configuration for AI readability
-        const formattedConfigs = config.data.map(formatConfigForDisplay);
+        // API returns array for all types, single object for specific type
+        const configArray = Array.isArray(config.data) ? config.data : [config.data];
+        const formattedConfigs = configArray.map(formatConfigForDisplay);
 
         const result = {
           entityType: input.entityType ?? 'all',

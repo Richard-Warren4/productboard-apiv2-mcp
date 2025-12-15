@@ -547,7 +547,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         );
 
         // Format output
-        const entityTypes = config.data.map((c) => {
+        // API returns array for all types, single object for specific type
+        const configArray = Array.isArray(config.data) ? config.data : [config.data];
+        const entityTypes = configArray.map((c) => {
           const base: Record<string, unknown> = {
             type: c.type,
             fieldCount: c.fields.length,
@@ -606,7 +608,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const config = await client.getEntityConfiguration();
 
         // Re-cache the configuration
-        const entityTypes = config.data.map((c) => c.type);
+        // API returns array for all types, single object for specific type
+        const configArray = Array.isArray(config.data) ? config.data : [config.data];
+        const entityTypes = configArray.map((c) => c.type);
 
         const result = {
           message: 'Configuration cache cleared and refreshed',

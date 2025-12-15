@@ -1,11 +1,3 @@
 {
-  "mcpServers": {
-    "productboard": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "env": {
-        "PRODUCTBOARD_API_TOKEN": "${PRODUCTBOARD_API_TOKEN}"
-      }
-    }
-  }
+  "mcpServers": {}
 }
