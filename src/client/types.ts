@@ -12,16 +12,38 @@
 // Entity Types
 // =============================================================================
 
+/**
+ * All entity types supported by ProductBoard API v2.
+ * Note: 'user' is read-only (no create/update operations)
+ *
+ * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
+ * Configuration endpoint only returns: objective, product, component, feature,
+ * subfeature, releaseGroup, release, company, user
+ */
 export type EntityType =
+  | 'objective'
   | 'product'
   | 'component'
   | 'feature'
   | 'subfeature'
-  | 'initiative'
-  | 'objective'
-  | 'keyResult'
+  | 'releaseGroup'
   | 'release'
-  | 'releaseGroup';
+  | 'company'
+  | 'user';
+
+/**
+ * Entity types that support write operations (create/update)
+ */
+export type WritableEntityType = Exclude<EntityType, 'user'>;
+
+/**
+ * Entity types that support search operations.
+ * Note: Search supports additional filters not available on list endpoint:
+ * - statuses, owners, parent, archived, ids (all searchable types)
+ *
+ * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
+ */
+export type SearchableEntityType = 'feature' | 'subfeature' | 'objective';
 
 // =============================================================================
 // Field Value Types (Read - returned from API)
@@ -223,6 +245,95 @@ export interface Team {
 }
 
 // =============================================================================
+// Generic Entity Types (for unified entity handling)
+// =============================================================================
+
+/**
+ * Generic entity fields - dynamic based on entity type and workspace configuration.
+ * Common fields are typed; additional fields come from workspace config.
+ */
+export interface GenericEntityFields {
+  name?: string;
+  description?: string | RichTextFieldValue;
+  status?: StatusFieldValue;
+  owner?: MemberFieldValue;
+  teams?: TeamFieldValue[];
+  archived?: boolean;
+  parent?: EntityReference;
+  [key: string]: unknown; // Dynamic fields from workspace configuration
+}
+
+/**
+ * Generic entity representation for any ProductBoard entity type.
+ * Used for unified CRUD operations across all entity types.
+ */
+export interface GenericEntity {
+  id: string;
+  type: EntityType;
+  fields: GenericEntityFields;
+  relationships?: {
+    data: Array<{
+      type: string;
+      target: EntityReference;
+    }>;
+  };
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+  links: {
+    self: string;
+    html?: string; // ProductBoard UI link - may not be present
+  };
+}
+
+/**
+ * Input for creating a generic entity
+ */
+export interface CreateGenericEntityInput {
+  entityType: WritableEntityType;
+  fields: Record<string, unknown>;
+}
+
+/**
+ * Input for updating a generic entity
+ */
+export interface UpdateGenericEntityInput {
+  id: string;
+  fields: Record<string, unknown>;
+}
+
+/**
+ * Input for listing generic entities
+ *
+ * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
+ * It returns 100 items per page. Use pageCursor for subsequent pages.
+ */
+export interface ListGenericEntitiesInput {
+  entityType: EntityType;
+  pageCursor?: string;
+}
+
+/**
+ * Input for searching generic entities.
+ *
+ * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
+ * It returns 100 items per page. Use pageCursor for subsequent pages.
+ *
+ * IMPORTANT: All filters must be direct properties under `data`, NOT in a `filter` wrapper.
+ * The official ProductBoard docs show a `filter` property but that does NOT work.
+ * See research.md for verified examples.
+ */
+export interface SearchGenericEntitiesInput {
+  entityType: SearchableEntityType;
+  name?: string;
+  statuses?: Array<{ name?: string; id?: string }>;
+  owners?: Array<{ email?: string; id?: string }>;
+  parent?: { id: string };
+  archived?: boolean;
+  ids?: string[];
+  pageCursor?: string;
+}
+
+// =============================================================================
 // API Response Types
 // =============================================================================
 
@@ -261,6 +372,7 @@ export interface ApiErrorResponse {
 // Configuration Types
 // =============================================================================
 
+/** Known field value types (includes 'unknown' for forward compatibility) */
 export type FieldType =
   | 'text'
   | 'richtext'
@@ -271,9 +383,15 @@ export type FieldType =
   | 'status'
   | 'member'
   | 'team'
-  | 'singleSelect'
-  | 'multiSelect'
-  | 'entityReference';
+  | 'single_select'
+  | 'multi_select'
+  | 'singleSelect' // Legacy API format
+  | 'multiSelect' // Legacy API format
+  | 'entityReference'
+  | 'health'
+  | 'progress'
+  | 'timeframe'
+  | 'unknown'; // For forward compatibility with new API types
 
 /** Option for select fields */
 export interface FieldOption {
@@ -282,7 +400,39 @@ export interface FieldOption {
   color?: string;
 }
 
-/** Field configuration */
+/** Validation rules for a field */
+export interface FieldValidation {
+  /** Maximum length for text fields */
+  maxLength?: number;
+  /** Minimum value for number fields */
+  minValue?: number;
+  /** Maximum value for number fields */
+  maxValue?: number;
+  /** Regex pattern for text fields */
+  pattern?: string;
+}
+
+/** Definition of a configurable field */
+export interface FieldDefinition {
+  /** Internal field identifier */
+  id: string;
+  /** API field name (used in requests) */
+  name: string;
+  /** Human-readable display name */
+  displayName: string;
+  /** Field value type */
+  type: FieldType;
+  /** Whether field is required for creation */
+  required: boolean;
+  /** Whether field is read-only (cannot be set) */
+  readOnly: boolean;
+  /** Available options for select-type fields */
+  options?: FieldOption[];
+  /** Validation constraints */
+  validation?: FieldValidation;
+}
+
+/** Field configuration (alias for FieldDefinition for backwards compatibility) */
 export interface FieldConfiguration {
   id: string;
   name: string;
@@ -290,26 +440,86 @@ export interface FieldConfiguration {
   type: FieldType;
   required: boolean;
   readOnly: boolean;
-  options?: FieldOption[]; // For select fields
+  options?: FieldOption[];
+  validation?: FieldValidation;
 }
 
-/** Entity configuration from discovery endpoint */
+/** Lifecycle operation configuration */
+export interface LifecycleOperation {
+  /** Fields that can be set during this operation */
+  settableFields: string[];
+  /** Fields that are required for this operation */
+  requiredFields: string[];
+}
+
+/** Configuration metadata for an entity type */
 export interface EntityConfiguration {
-  type: EntityType;
-  fields: FieldConfiguration[];
+  /** Entity type identifier (may be EntityType or custom type from workspace) */
+  type: string;
+  /** Available fields for this entity type */
+  fields: FieldDefinition[];
+  /** Supported lifecycle operations */
+  lifecycle?: {
+    create?: LifecycleOperation;
+    update?: LifecycleOperation;
+    delete?: LifecycleOperation;
+  };
+}
+
+// =============================================================================
+// Validation Types
+// =============================================================================
+
+/** Types of validation issues */
+export type ValidationIssue =
+  | 'missing_required' // Required field not provided
+  | 'invalid_value' // Value doesn't match options
+  | 'type_mismatch' // Value type doesn't match field type
+  | 'constraint_violation'; // Value violates validation constraint
+
+/** A validation warning (non-blocking) */
+export interface ValidationWarning {
+  /** Field that triggered the warning */
+  field: string;
+  /** Type of validation issue */
+  issue: ValidationIssue;
+  /** Human-readable warning message */
+  message: string;
+  /** Suggested fix or available options */
+  suggestion?: string;
+}
+
+/** Result of field validation */
+export interface ValidationResult {
+  /** Whether all validations passed (no warnings) */
+  valid: boolean;
+  /** List of validation warnings */
+  warnings: ValidationWarning[];
+}
+
+/** Session cache for configuration data */
+export interface ConfigCache {
+  /** Cached configurations by entity type */
+  configs: Map<string, EntityConfiguration>;
+  /** Track if initial fetch has been done */
+  initialized: boolean;
 }
 
 // =============================================================================
 // Relationship Types
 // =============================================================================
 
-export type RelationshipType =
-  | 'parent'
-  | 'component'
-  | 'product'
-  | 'initiative'
-  | 'objective'
-  | 'release';
+/**
+ * Relationship types for ProductBoard API v2
+ *
+ * Supported by POST /entities/{id}/relationships (createRelationship):
+ * - parent: identifies target as parent of source entity
+ * - child: identifies target as child of source entity
+ * - link: non-hierarchical connection (e.g., feature to objective)
+ * - isBlockedBy: dependency - source is blocked by target
+ * - isBlocking: dependency - source blocks target
+ */
+export type RelationshipType = 'parent' | 'child' | 'link' | 'isBlockedBy' | 'isBlocking';
 
 /** Relationship between entities */
 export interface Relationship {

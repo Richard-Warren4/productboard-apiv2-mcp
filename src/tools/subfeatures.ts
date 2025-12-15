@@ -14,7 +14,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { ProductBoardClient } from '../client/api.js';
-import type { Subfeature } from '../client/types.js';
+import type { Subfeature, ValidationWarning } from '../client/types.js';
 import { toMcpError, toMcpSuccess } from '../client/errors.js';
 import {
   ListSubfeaturesInputSchema,
@@ -24,6 +24,8 @@ import {
 } from '../schemas/inputs.js';
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 import { validateRichtext } from '../utils/richtext.js';
+import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
+import { getSessionCached } from './config.js';
 
 /**
  * Get team name(s) from subfeature fields
@@ -166,13 +168,8 @@ export function registerSubfeatureTools(server: McpServer, client: ProductBoardC
           }
         }
 
-        // Build create input
-        const createInput: {
-          name: string;
-          parent: { id: string };
-          description?: { value: string };
-          status?: { name: string };
-        } = {
+        // Build create input - start with known fields
+        const createInput: Record<string, unknown> = {
           name: input.name,
           parent: { id: input.featureId },
         };
@@ -185,12 +182,55 @@ export function registerSubfeatureTools(server: McpServer, client: ProductBoardC
           createInput.status = { name: input.status };
         }
 
-        const response = await client.createSubfeature(createInput);
+        // Pass through custom fields (US3: Dynamic field support)
+        const knownFields = ['name', 'featureId', 'description', 'status'];
+        for (const [key, value] of Object.entries(input)) {
+          if (!knownFields.includes(key) && value !== undefined) {
+            createInput[key] = value;
+          }
+        }
 
-        return toMcpSuccess({
+        // Validate fields against configuration (warn-only, non-blocking)
+        const validationWarnings: ValidationWarning[] = [];
+        const subfeatureConfig = await getConfigForValidation(client, 'subfeature', getSessionCached);
+        if (subfeatureConfig) {
+          const validation = validateFieldsAgainstConfig(createInput, subfeatureConfig, 'create');
+          validationWarnings.push(...validation.warnings);
+        }
+
+        // Create subfeature (proceed even with warnings)
+        const createResponse = await client.createSubfeature(createInput as never);
+
+        // The POST response may not include full entity details (fields).
+        // Fetch the complete entity to ensure we have all field data.
+        let subfeature = createResponse.data;
+        if (!subfeature?.fields) {
+          // Response lacks fields - fetch the entity by ID to get full details
+          if (!subfeature?.id) {
+            return toMcpError({
+              code: 'API_ERROR',
+              message: 'Subfeature created but response missing both fields and id',
+              details: {
+                hint: 'The ProductBoard API returned an unexpected response format',
+                receivedKeys: subfeature ? Object.keys(subfeature) : [],
+              },
+            });
+          }
+          const fetchResponse = await client.getSubfeature(subfeature.id);
+          subfeature = fetchResponse.data;
+        }
+
+        const result: Record<string, unknown> = {
           message: 'Subfeature created successfully',
-          subfeature: formatSubfeature(response.data),
-        });
+          subfeature: formatSubfeature(subfeature),
+        };
+
+        // Include validation warnings if any
+        if (validationWarnings.length > 0) {
+          result.validationWarnings = validationWarnings;
+        }
+
+        return toMcpSuccess(result);
       } catch (error) {
         return toMcpError(error);
       }
@@ -245,6 +285,15 @@ export function registerSubfeatureTools(server: McpServer, client: ProductBoardC
           updatedFields.push('status');
         }
 
+        // Pass through custom fields (US3: Dynamic field support)
+        const knownFields = ['subfeatureId', 'name', 'description', 'status'];
+        for (const [key, value] of Object.entries(input)) {
+          if (!knownFields.includes(key) && value !== undefined) {
+            updateInput[key] = value;
+            updatedFields.push(key);
+          }
+        }
+
         if (updatedFields.length === 0) {
           return toMcpError({
             code: 'VALIDATION_ERROR',
@@ -253,13 +302,29 @@ export function registerSubfeatureTools(server: McpServer, client: ProductBoardC
           });
         }
 
+        // Validate fields against configuration (warn-only, non-blocking)
+        const validationWarnings: ValidationWarning[] = [];
+        const subfeatureConfig = await getConfigForValidation(client, 'subfeature', getSessionCached);
+        if (subfeatureConfig) {
+          const validation = validateFieldsAgainstConfig(updateInput, subfeatureConfig, 'update');
+          validationWarnings.push(...validation.warnings);
+        }
+
+        // Update subfeature (proceed even with warnings)
         const response = await client.updateSubfeature(input.subfeatureId, updateInput as never);
 
-        return toMcpSuccess({
+        const result: Record<string, unknown> = {
           message: 'Subfeature updated successfully',
           updatedFields,
           subfeature: formatSubfeature(response.data),
-        });
+        };
+
+        // Include validation warnings if any
+        if (validationWarnings.length > 0) {
+          result.validationWarnings = validationWarnings;
+        }
+
+        return toMcpSuccess(result);
       } catch (error) {
         return toMcpError(error);
       }

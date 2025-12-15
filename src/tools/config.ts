@@ -13,6 +13,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { ProductBoardClient } from '../client/api.js';
+import type { FieldType } from '../client/types.js';
 import { toMcpError, toMcpSuccess } from '../client/errors.js';
 import {
   GetConfigInputSchema,
@@ -21,26 +22,144 @@ import {
 } from '../schemas/inputs.js';
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 
-/**
- * Cache for configuration data
- */
-const configCache: Map<string, { data: unknown; timestamp: number }> = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+/** Raw API response type from getEntityConfiguration */
+type RawApiConfigResponse = Awaited<ReturnType<ProductBoardClient['getEntityConfiguration']>>;
+
+/** Raw field from API (type is string, not FieldType) */
+interface RawApiField {
+  id: string;
+  name: string;
+  displayName: string;
+  type: string;
+  required: boolean;
+  readOnly: boolean;
+  options?: Array<{ id: string; name: string }>;
+}
 
 /**
- * Get cached data or fetch fresh
+ * Known field types that we display in configuration output.
+ * Unknown types are silently skipped per FR-008.
  */
-async function getCachedOrFetch<T>(
-  key: string,
-  fetchFn: () => Promise<T>
-): Promise<T> {
-  const cached = configCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data as T;
+export const KNOWN_FIELD_TYPES: FieldType[] = [
+  'text',
+  'richtext',
+  'number',
+  'boolean',
+  'date',
+  'datetime',
+  'status',
+  'member',
+  'team',
+  'single_select',
+  'multi_select',
+  'singleSelect',
+  'multiSelect',
+  'entityReference',
+  'health',
+  'progress',
+  'timeframe',
+];
+
+/**
+ * Session-based cache for configuration data.
+ * No TTL - data persists for the entire MCP server session.
+ * Cache clears only on server restart (per FR-007).
+ */
+const sessionCache: Map<string, unknown> = new Map();
+
+/**
+ * Get cached data or fetch fresh (session-based caching, no TTL).
+ * Once fetched, data remains cached for the entire session.
+ */
+export async function getSessionCached<T>(key: string, fetchFn: () => Promise<T>): Promise<T> {
+  const cached = sessionCache.get(key);
+  if (cached !== undefined) {
+    return cached as T;
   }
   const data = await fetchFn();
-  configCache.set(key, { data, timestamp: Date.now() });
+  sessionCache.set(key, data);
   return data;
+}
+
+/**
+ * Clear all cached configuration data.
+ * Used by pb_refresh_config to force fresh data fetch.
+ */
+export function clearSessionCache(): void {
+  sessionCache.clear();
+}
+
+/**
+ * Check if a field type is known (should be displayed).
+ */
+function isKnownFieldType(type: string): type is FieldType {
+  return KNOWN_FIELD_TYPES.includes(type as FieldType);
+}
+
+/**
+ * Format a field definition for AI-readable output.
+ * Includes type, required status, and options for select fields.
+ * Accepts raw API field type (string) and filters unknown types.
+ */
+function formatFieldForDisplay(field: RawApiField): Record<string, unknown> | null {
+  // Skip unknown field types silently (FR-008)
+  if (!isKnownFieldType(field.type)) {
+    return null;
+  }
+
+  const formatted: Record<string, unknown> = {
+    name: field.name,
+    displayName: field.displayName,
+    type: field.type,
+    required: field.required,
+    readOnly: field.readOnly,
+  };
+
+  // Include options for select-type fields
+  if (field.options && field.options.length > 0) {
+    formatted.options = field.options.map((opt) => ({
+      id: opt.id,
+      name: opt.name,
+    }));
+  }
+
+  return formatted;
+}
+
+/** Raw entity config from API */
+interface RawApiEntityConfig {
+  type: string;
+  fields: RawApiField[];
+}
+
+/**
+ * Format entity configuration for AI-readable output.
+ * Works with raw API response type.
+ */
+function formatConfigForDisplay(config: RawApiEntityConfig): Record<string, unknown> {
+  const fields = config.fields
+    .map(formatFieldForDisplay)
+    .filter((f): f is Record<string, unknown> => f !== null);
+
+  const requiredFields = config.fields
+    .filter((f) => f.required && isKnownFieldType(f.type))
+    .map((f) => f.name);
+
+  const selectFields = config.fields
+    .filter((f) => ['status', 'single_select', 'multi_select', 'singleSelect', 'multiSelect'].includes(f.type))
+    .filter((f) => f.options && f.options.length > 0)
+    .map((f) => ({
+      name: f.name,
+      options: f.options!.map((o) => o.name),
+    }));
+
+  return {
+    type: config.type,
+    totalFields: fields.length,
+    requiredFields,
+    selectFieldsWithOptions: selectFields,
+    fields,
+  };
 }
 
 /**
@@ -53,7 +172,8 @@ export function registerConfigTools(server: McpServer, client: ProductBoardClien
   server.tool(
     'pb_get_config',
     'Get ProductBoard configuration for entity types. ' +
-      'Returns available fields, statuses, and options that can be used when creating or updating features.',
+      'Returns available fields with names, types, required status, and options for select fields. ' +
+      'Use this to discover what fields are available in your workspace before creating or updating features.',
     {
       entityType: z
         .enum(['feature', 'subfeature'])
@@ -64,16 +184,33 @@ export function registerConfigTools(server: McpServer, client: ProductBoardClien
       try {
         const input = GetConfigInputSchema.parse(args);
 
-        const config = await getCachedOrFetch(
-          `config:${input.entityType ?? 'all'}`,
-          () => client.getEntityConfiguration(input.entityType)
-        );
+        // Use session-based caching - fetch once per session (FR-007)
+        let config: RawApiConfigResponse;
+        try {
+          config = await getSessionCached(
+            `config:${input.entityType ?? 'all'}`,
+            () => client.getEntityConfiguration(input.entityType)
+          );
+        } catch (fetchError) {
+          // Graceful degradation: return helpful message if config fetch fails (FR-006)
+          return toMcpSuccess({
+            entityType: input.entityType ?? 'all',
+            error: 'Configuration fetch failed. Operations will proceed without validation.',
+            hint: 'This may be due to API permissions or network issues. You can still create and update entities.',
+            details: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          });
+        }
 
-        // Format for AI readability
+        // Format each configuration for AI readability
+        const formattedConfigs = config.data.map(formatConfigForDisplay);
+
         const result = {
           entityType: input.entityType ?? 'all',
-          configuration: config.data,
-          hint: 'Use the field IDs and option names when creating or updating entities.',
+          configurations: formattedConfigs,
+          summary: {
+            totalEntityTypes: formattedConfigs.length,
+            hint: 'Use field names and option names when creating or updating entities. Required fields must be provided for create operations.',
+          },
         };
 
         return toMcpSuccess(result);

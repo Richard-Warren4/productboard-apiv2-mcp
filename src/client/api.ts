@@ -18,6 +18,10 @@ import type {
   UpdateFeatureInput,
   CreateSubfeatureInput,
   UpdateSubfeatureInput,
+  GenericEntity,
+  EntityType,
+  WritableEntityType,
+  SearchableEntityType,
 } from './types.js';
 import { ProductBoardError, handleApiError } from './errors.js';
 
@@ -305,16 +309,21 @@ export class ProductBoardClient {
   /**
    * List subfeatures for a parent feature
    *
-   * ProductBoard API v2 returns all configured fields by default.
+   * Uses the search endpoint with parent filter since GET /entities
+   * doesn't support parent.id query parameter.
    */
   async listSubfeatures(
     featureId: string,
     params?: { pageCursor?: string }
   ): Promise<PaginatedResponse<Subfeature>> {
-    return this.request<PaginatedResponse<Subfeature>>('GET', '/entities', {
+    return this.request<PaginatedResponse<Subfeature>>('POST', '/entities/search', {
+      body: {
+        data: {
+          type: 'subfeature',
+          parent: { id: featureId },
+        },
+      },
       params: {
-        type: 'subfeature',
-        'parent.id': featureId,
         pageCursor: params?.pageCursor,
       },
     });
@@ -411,20 +420,75 @@ export class ProductBoardClient {
 
   /**
    * Get relationships for an entity
+   *
+   * Returns all relationships including: parent, child, link, isBlockedBy, isBlocking
    */
   async getRelationships(entityId: string): Promise<{
-    data: {
-      parent?: { id: string; type: string };
-      product?: { id: string; type: string };
-      component?: { id: string; type: string };
-      children?: Array<{ id: string; type: string }>;
-    };
+    data: Array<{
+      type: string;
+      target: {
+        id: string;
+        type: string;
+        links?: { self: string };
+      };
+    }>;
+    links: { next: string | null };
   }> {
     return this.request('GET', `/entities/${entityId}/relationships`);
   }
 
   /**
-   * Set a relationship for an entity
+   * Create a relationship between entities
+   *
+   * Uses POST /entities/{id}/relationships endpoint.
+   * This is the preferred method for creating relationships like linking features to objectives.
+   *
+   * Supported relationship types:
+   * - `parent` - identifies target as parent of source entity
+   * - `child` - identifies target as child of source entity
+   * - `link` - non-hierarchical connection (e.g., feature to objective)
+   * - `isBlockedBy` - dependency: source is blocked by target
+   * - `isBlocking` - dependency: source blocks target
+   *
+   * @example
+   * // Link a feature to an objective
+   * await client.createRelationship(featureId, 'link', objectiveId);
+   *
+   * @example
+   * // Create a blocking dependency
+   * await client.createRelationship(featureId, 'isBlockedBy', otherFeatureId);
+   */
+  async createRelationship(
+    entityId: string,
+    relationshipType: 'parent' | 'child' | 'link' | 'isBlockedBy' | 'isBlocking',
+    targetId: string
+  ): Promise<{
+    data: {
+      type: string;
+      target: {
+        id: string;
+        type: string;
+        links?: { self: string };
+      };
+    };
+    links: { self: string };
+  }> {
+    return this.request('POST', `/entities/${entityId}/relationships`, {
+      body: {
+        data: {
+          target: { id: targetId },
+          type: relationshipType,
+        },
+      },
+    });
+  }
+
+  /**
+   * Set/replace a single-target relationship for an entity
+   *
+   * Uses PUT /entities/{id}/relationships/{type} endpoint.
+   * Use this for relationships that have a single target (like parent).
+   * For multi-target relationships (like links), use createRelationship instead.
    *
    * API expects: { data: { target: { id } } }
    */
@@ -483,6 +547,151 @@ export class ProductBoardClient {
       ? `/entities/configurations/${entityType}`
       : '/entities/configurations';
     return this.request('GET', path);
+  }
+
+  // ===========================================================================
+  // Generic Entity Operations
+  // ===========================================================================
+
+  /**
+   * Get a single entity by ID (any entity type)
+   *
+   * The entity type is auto-detected from the response.
+   */
+  async getEntity(entityId: string): Promise<EntityResponse<GenericEntity>> {
+    return this.request<EntityResponse<GenericEntity>>('GET', `/entities/${entityId}`);
+  }
+
+  /**
+   * Create a new entity of any writable type
+   *
+   * API expects: { data: { type, fields, relationships? } }
+   *
+   * @param entityType - The type of entity to create (user is not allowed)
+   * @param fields - Field values for the entity
+   * @param relationships - Optional relationships (e.g., parent)
+   */
+  async createEntity(
+    entityType: WritableEntityType,
+    fields: Record<string, unknown>,
+    relationships?: Array<{ type: string; target: { id: string } }>
+  ): Promise<EntityResponse<GenericEntity>> {
+    return this.request<EntityResponse<GenericEntity>>('POST', '/entities', {
+      body: {
+        data: {
+          type: entityType,
+          fields,
+          ...(relationships && relationships.length > 0 ? { relationships } : {}),
+        },
+      },
+    });
+  }
+
+  /**
+   * Update an existing entity
+   *
+   * API expects: { data: { fields: {...} } }
+   *
+   * @param entityId - The entity UUID
+   * @param fields - Field values to update (partial update)
+   */
+  async updateEntity(
+    entityId: string,
+    fields: Record<string, unknown>
+  ): Promise<EntityResponse<GenericEntity>> {
+    return this.request<EntityResponse<GenericEntity>>('PATCH', `/entities/${entityId}`, {
+      body: {
+        data: {
+          fields,
+        },
+      },
+    });
+  }
+
+  /**
+   * List entities of a specific type with pagination
+   *
+   * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
+   * It returns 100 items per page. Use pageCursor for subsequent pages.
+   *
+   * @param entityType - The type of entities to list
+   * @param params - Pagination parameters (pageCursor only)
+   */
+  async listEntities(
+    entityType: EntityType,
+    params?: {
+      pageCursor?: string;
+    }
+  ): Promise<PaginatedResponse<GenericEntity>> {
+    return this.request<PaginatedResponse<GenericEntity>>('GET', '/entities', {
+      params: {
+        type: entityType,
+        pageCursor: params?.pageCursor,
+      },
+    });
+  }
+
+  /**
+   * Search entities with filters
+   *
+   * Uses POST /entities/search endpoint.
+   * Supported for: feature, subfeature, objective
+   *
+   * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
+   * It returns 100 items per page. Use pageCursor for subsequent pages.
+   *
+   * IMPORTANT: All filters must be direct properties under `data`, NOT in a `filter` wrapper.
+   * The official ProductBoard docs show a `filter` property but that does NOT work.
+   * See CLAUDE.md and research.md for verified examples.
+   *
+   * @param entityType - The type of entities to search
+   * @param filters - Search filters
+   * @param params - Pagination parameters (pageCursor only)
+   */
+  async searchEntities(
+    entityType: SearchableEntityType,
+    filters?: {
+      name?: string;
+      statuses?: Array<{ name?: string; id?: string }>;
+      owners?: Array<{ email?: string; id?: string }>;
+      parent?: { id: string };
+      archived?: boolean;
+      ids?: string[];
+    },
+    params?: {
+      pageCursor?: string;
+    }
+  ): Promise<PaginatedResponse<GenericEntity>> {
+    const data: Record<string, unknown> = {
+      type: entityType,
+    };
+
+    // Add optional filters (all are direct properties under `data`, NOT in a filter wrapper)
+    if (filters?.name) {
+      data.name = filters.name;
+    }
+    if (filters?.statuses && filters.statuses.length > 0) {
+      data.statuses = filters.statuses;
+    }
+    if (filters?.owners && filters.owners.length > 0) {
+      data.owners = filters.owners;
+    }
+    if (filters?.parent) {
+      data.parent = filters.parent;
+    }
+    if (filters?.archived !== undefined) {
+      data.archived = filters.archived;
+    }
+    if (filters?.ids && filters.ids.length > 0) {
+      data.ids = filters.ids;
+    }
+
+    return this.request<PaginatedResponse<GenericEntity>>('POST', '/entities/search', {
+      body: { data },
+      params: {
+        pageCursor: params?.pageCursor,
+      },
+    });
   }
 }
 

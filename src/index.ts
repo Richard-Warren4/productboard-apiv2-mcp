@@ -18,6 +18,7 @@ import { registerSearchTools } from './tools/search.js';
 import { registerRelationshipTools } from './tools/relationships.js';
 import { registerConfigTools } from './tools/config.js';
 import { registerSubfeatureTools } from './tools/subfeatures.js';
+import { registerEntityTools } from './tools/entities.js';
 
 // Server metadata
 const SERVER_NAME = 'productboard-mcp';
@@ -65,20 +66,19 @@ async function main(): Promise<void> {
   registerRelationshipTools(server, client);
   registerConfigTools(server, client);
   registerSubfeatureTools(server, client);
+  registerEntityTools(server, client); // Generic entity tools (US1, US4, US5)
 
   // Connect to transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    await server.close();
-    process.exit(0);
+  process.on('SIGINT', () => {
+    void server.close().then(() => process.exit(0));
   });
 
-  process.on('SIGTERM', async () => {
-    await server.close();
-    process.exit(0);
+  process.on('SIGTERM', () => {
+    void server.close().then(() => process.exit(0));
   });
 }
 

@@ -1,9 +1,10 @@
 /**
  * Relationship MCP Tools
  *
- * MCP tools for managing ProductBoard feature relationships:
- * - pb_get_relationships: Get relationships for a feature
- * - pb_set_relationship: Set a relationship between entities
+ * MCP tools for managing ProductBoard entity relationships:
+ * - pb_get_relationships: Get all relationships for an entity
+ * - pb_create_relationship: Create a new relationship (POST endpoint)
+ * - pb_set_relationship: Set/replace a single-target relationship (PUT endpoint)
  * - pb_remove_relationship: Remove a relationship
  *
  * @module tools/relationships
@@ -21,35 +22,46 @@ import {
 } from '../schemas/inputs.js';
 
 /**
- * Valid relationship types
+ * Valid relationship types for POST /entities/{id}/relationships
+ *
+ * - parent: identifies target as parent of source entity
+ * - child: identifies target as child of source entity
+ * - link: non-hierarchical connection (e.g., feature to objective)
+ * - isBlockedBy: dependency - source is blocked by target
+ * - isBlocking: dependency - source blocks target
  */
-const RELATIONSHIP_TYPES = ['component', 'product', 'initiative', 'parent'] as const;
+const CREATE_RELATIONSHIP_TYPES = ['parent', 'child', 'link', 'isBlockedBy', 'isBlocking'] as const;
 
 /**
  * Format relationships for AI-readable output
  */
 function formatRelationships(
-  featureId: string,
-  relationships: {
-    parent?: { id: string; type: string };
-    product?: { id: string; type: string };
-    component?: { id: string; type: string };
-    children?: Array<{ id: string; type: string }>;
-  }
+  entityId: string,
+  relationships: Array<{
+    type: string;
+    target: {
+      id: string;
+      type: string;
+      links?: { self: string };
+    };
+  }>
 ): Record<string, unknown> {
+  // Group relationships by type
+  const grouped: Record<string, Array<{ id: string; type: string }>> = {};
+  for (const rel of relationships) {
+    if (!grouped[rel.type]) {
+      grouped[rel.type] = [];
+    }
+    grouped[rel.type].push({ id: rel.target.id, type: rel.target.type });
+  }
+
   return {
-    featureId,
-    relationships: {
-      parent: relationships.parent ?? null,
-      product: relationships.product ?? null,
-      component: relationships.component ?? null,
-      children: relationships.children ?? [],
-    },
+    entityId,
+    relationships: grouped,
     summary: {
-      hasParent: !!relationships.parent,
-      hasProduct: !!relationships.product,
-      hasComponent: !!relationships.component,
-      childrenCount: relationships.children?.length ?? 0,
+      totalCount: relationships.length,
+      types: Object.keys(grouped),
+      byType: Object.fromEntries(Object.entries(grouped).map(([k, v]) => [k, v.length])),
     },
   };
 }
@@ -59,14 +71,14 @@ function formatRelationships(
  */
 export function registerRelationshipTools(server: McpServer, client: ProductBoardClient): void {
   // ===========================================================================
-  // pb_get_relationships - Get relationships for a feature (US6)
+  // pb_get_relationships - Get all relationships for an entity (US6)
   // ===========================================================================
   server.tool(
     'pb_get_relationships',
-    'Get all relationships for a ProductBoard feature. ' +
-      'Returns parent, product, component, and child relationships.',
+    'Get all relationships for a ProductBoard entity. ' +
+      'Returns parent, child, link, isBlockedBy, and isBlocking relationships.',
     {
-      featureId: z.string().describe('Feature ID to get relationships for'),
+      featureId: z.string().describe('Entity ID to get relationships for'),
     },
     async (args) => {
       try {
@@ -82,18 +94,57 @@ export function registerRelationshipTools(server: McpServer, client: ProductBoar
   );
 
   // ===========================================================================
-  // pb_set_relationship - Set a relationship (US6)
+  // pb_create_relationship - Create a new relationship (POST endpoint)
+  // ===========================================================================
+  server.tool(
+    'pb_create_relationship',
+    'Create a relationship between entities. ' +
+      'Use this to link features to objectives, create dependencies, or establish parent/child relationships. ' +
+      'Supported types: parent, child, link (for feature-to-objective), isBlockedBy, isBlocking.',
+    {
+      entityId: z.string().describe('Source entity ID'),
+      relationshipType: z
+        .enum(CREATE_RELATIONSHIP_TYPES)
+        .describe('Type of relationship: parent, child, link, isBlockedBy, isBlocking'),
+      targetId: z.string().describe('Target entity ID'),
+    },
+    async (args) => {
+      try {
+        const { entityId, relationshipType, targetId } = args as {
+          entityId: string;
+          relationshipType: (typeof CREATE_RELATIONSHIP_TYPES)[number];
+          targetId: string;
+        };
+
+        const response = await client.createRelationship(entityId, relationshipType, targetId);
+
+        // Fetch updated relationships to confirm
+        const allRelationships = await client.getRelationships(entityId);
+
+        return toMcpSuccess({
+          message: `Relationship created successfully: ${relationshipType} -> ${response.data.target.type}:${targetId}`,
+          created: response.data,
+          ...formatRelationships(entityId, allRelationships.data),
+        });
+      } catch (error) {
+        return toMcpError(error);
+      }
+    }
+  );
+
+  // ===========================================================================
+  // pb_set_relationship - Set/replace a single-target relationship (PUT endpoint)
   // ===========================================================================
   server.tool(
     'pb_set_relationship',
-    'Set a relationship between a feature and another entity. ' +
-      'Supported types: component, product, initiative, parent. ' +
-      'Setting a relationship will replace any existing relationship of that type.',
+    'Set or replace a single-target relationship for an entity. ' +
+      'Use this for relationships like parent that can only have one target. ' +
+      'For multi-target relationships (like links), use pb_create_relationship instead.',
     {
-      featureId: z.string().describe('Feature ID'),
+      featureId: z.string().describe('Entity ID'),
       relationshipType: z
-        .enum(RELATIONSHIP_TYPES)
-        .describe('Type of relationship (component, product, initiative, parent)'),
+        .enum(CREATE_RELATIONSHIP_TYPES)
+        .describe('Type of relationship'),
       targetId: z.string().describe('Target entity ID'),
     },
     async (args) => {
@@ -120,12 +171,12 @@ export function registerRelationshipTools(server: McpServer, client: ProductBoar
   // ===========================================================================
   server.tool(
     'pb_remove_relationship',
-    'Remove a relationship from a feature. ' +
-      'Supported types: component, product, initiative, parent.',
+    'Remove a relationship from an entity. ' +
+      'Supported types: parent, child, link, isBlockedBy, isBlocking.',
     {
-      featureId: z.string().describe('Feature ID'),
+      featureId: z.string().describe('Entity ID'),
       relationshipType: z
-        .enum(RELATIONSHIP_TYPES)
+        .enum(CREATE_RELATIONSHIP_TYPES)
         .describe('Type of relationship to remove'),
       targetId: z.string().describe('Target entity ID to unlink'),
     },

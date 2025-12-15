@@ -14,7 +14,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { ProductBoardClient } from '../client/api.js';
-import type { Feature } from '../client/types.js';
+import type { Feature, ValidationWarning } from '../client/types.js';
 import { toMcpError, toMcpSuccess } from '../client/errors.js';
 import {
   ListFeaturesInputSchema,
@@ -24,6 +24,8 @@ import {
 } from '../schemas/inputs.js';
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 import { validateRichtext } from '../utils/richtext.js';
+import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
+import { getSessionCached } from './config.js';
 
 /**
  * Extract parent ID from relationships
@@ -166,7 +168,7 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
         if (input.componentId) filters.componentId = input.componentId;
 
         if (Object.keys(filters).length > 0) {
-          (result as Record<string, unknown>).appliedFilters = filters;
+          result.appliedFilters = filters;
         }
 
         return toMcpSuccess(result);
@@ -250,23 +252,28 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
         }
 
         // Get relationships
-        let relationships: Record<string, unknown> = {};
+        type RelItem = { type: string; target: { id: string; type: string } };
+        let relationshipsArray: RelItem[] = [];
         try {
           const relResponse = await client.getRelationships(feature.id);
-          relationships = relResponse.data;
+          relationshipsArray = relResponse.data;
         } catch {
           // Relationships fetch failed, continue without them
+        }
+
+        // Group relationships by type
+        const grouped: Record<string, Array<{ id: string; type: string }>> = {};
+        for (const rel of relationshipsArray) {
+          if (!grouped[rel.type]) {
+            grouped[rel.type] = [];
+          }
+          grouped[rel.type].push({ id: rel.target.id, type: rel.target.type });
         }
 
         // Format detailed output
         const result = {
           ...formatFeature(feature),
-          relationships: {
-            product: relationships.product ?? null,
-            component: relationships.component ?? null,
-            parent: relationships.parent ?? null,
-            children: relationships.children ?? [],
-          },
+          relationships: grouped,
         };
 
         return toMcpSuccess(result);
@@ -309,7 +316,7 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
           }
         }
 
-        // Build create input
+        // Build create input - start with known fields
         const createInput: Record<string, unknown> = {
           name: input.name,
         };
@@ -336,13 +343,50 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
           createInput.product = { id: input.productId };
         }
 
-        // Create feature
-        const response = await client.createFeature(createInput as never);
+        // Pass through custom fields (US3: Dynamic field support)
+        const knownFields = ['name', 'description', 'teamId', 'teamName', 'status', 'componentId', 'productId'];
+        for (const [key, value] of Object.entries(input)) {
+          if (!knownFields.includes(key) && value !== undefined) {
+            createInput[key] = value;
+          }
+        }
 
-        return toMcpSuccess({
+        // Validate fields against configuration (warn-only, non-blocking)
+        const validationWarnings: ValidationWarning[] = [];
+        const featureConfig = await getConfigForValidation(client, 'feature', getSessionCached);
+        if (featureConfig) {
+          const validation = validateFieldsAgainstConfig(createInput, featureConfig, 'create');
+          validationWarnings.push(...validation.warnings);
+        }
+
+        // Create feature (proceed even with warnings)
+        const createResponse = await client.createFeature(createInput as never);
+
+        // The POST response may not include full entity details (fields).
+        // Fetch the complete entity to ensure we have all field data.
+        let feature = createResponse.data;
+        if (!feature?.fields) {
+          if (!feature?.id) {
+            return toMcpError({
+              code: 'API_ERROR',
+              message: 'Feature created but response missing both fields and id',
+            });
+          }
+          const fetchResponse = await client.getFeature(feature.id);
+          feature = fetchResponse.data;
+        }
+
+        const result: Record<string, unknown> = {
           message: 'Feature created successfully',
-          feature: formatFeature(response.data),
-        });
+          feature: formatFeature(feature),
+        };
+
+        // Include validation warnings if any
+        if (validationWarnings.length > 0) {
+          result.validationWarnings = validationWarnings;
+        }
+
+        return toMcpSuccess(result);
       } catch (error) {
         return toMcpError(error);
       }
@@ -418,6 +462,15 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
           updatedFields.push('owner');
         }
 
+        // Pass through custom fields (US3: Dynamic field support)
+        const knownFields = ['featureId', 'name', 'description', 'status', 'teamId', 'teamName', 'ownerId', 'ownerEmail'];
+        for (const [key, value] of Object.entries(input)) {
+          if (!knownFields.includes(key) && value !== undefined) {
+            updateInput[key] = value;
+            updatedFields.push(key);
+          }
+        }
+
         if (updatedFields.length === 0) {
           return toMcpError({
             code: 'VALIDATION_ERROR',
@@ -426,14 +479,29 @@ export function registerFeatureTools(server: McpServer, client: ProductBoardClie
           });
         }
 
-        // Update feature
+        // Validate fields against configuration (warn-only, non-blocking)
+        const validationWarnings: ValidationWarning[] = [];
+        const featureConfig = await getConfigForValidation(client, 'feature', getSessionCached);
+        if (featureConfig) {
+          const validation = validateFieldsAgainstConfig(updateInput, featureConfig, 'update');
+          validationWarnings.push(...validation.warnings);
+        }
+
+        // Update feature (proceed even with warnings)
         const response = await client.updateFeature(input.featureId, updateInput as never);
 
-        return toMcpSuccess({
+        const result: Record<string, unknown> = {
           message: 'Feature updated successfully',
           updatedFields,
           feature: formatFeature(response.data),
-        });
+        };
+
+        // Include validation warnings if any
+        if (validationWarnings.length > 0) {
+          result.validationWarnings = validationWarnings;
+        }
+
+        return toMcpSuccess(result);
       } catch (error) {
         return toMcpError(error);
       }

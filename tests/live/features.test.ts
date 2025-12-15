@@ -183,6 +183,61 @@ describe('ProductBoard Live API Tests', () => {
   });
 });
 
+describe('Subfeature Operations', () => {
+  let client: ProductBoardClient;
+  let parentFeatureId: string;
+
+  beforeAll(async () => {
+    client = createClient();
+    // Get a feature to use as parent for subfeature tests
+    const response = await client.listFeatures();
+    parentFeatureId = response.data[0].id;
+  });
+
+  describe('createSubfeature', () => {
+    it('should create a subfeature with minimal fields', async () => {
+      const testName = `Test Subfeature ${Date.now()}`;
+
+      const response = await client.createSubfeature({
+        name: testName,
+        parent: { id: parentFeatureId },
+      });
+
+      // Response should have either full entity OR at least an id
+      expect(response).toHaveProperty('data');
+      expect(response.data).toHaveProperty('id');
+
+      // If fields are present, verify structure
+      if (response.data.fields) {
+        expect(response.data.fields).toHaveProperty('name');
+        expect(response.data).toHaveProperty('type', 'subfeature');
+      }
+    });
+
+    it('should create a subfeature with description', async () => {
+      const testName = `Test Subfeature with Desc ${Date.now()}`;
+
+      const response = await client.createSubfeature({
+        name: testName,
+        parent: { id: parentFeatureId },
+        description: { value: '<p>Test description</p>' },
+      });
+
+      expect(response).toHaveProperty('data');
+      expect(response.data).toHaveProperty('id');
+    });
+  });
+
+  describe('listSubfeatures', () => {
+    it('should list subfeatures for a parent feature', async () => {
+      const response = await client.listSubfeatures(parentFeatureId);
+
+      expect(response).toHaveProperty('data');
+      expect(Array.isArray(response.data)).toBe(true);
+    });
+  });
+});
+
 describe('Feature Formatting', () => {
   let client: ProductBoardClient;
 

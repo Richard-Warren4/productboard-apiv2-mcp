@@ -16,6 +16,10 @@ Live API testing and entity discovery revealed:
 5. **Richtext HTML Restrictions**: Only `<b>`, `<i>`, `<s>`, `<u>`, `<br>`, `<a>`, `<code>`, `<img>`, `<p>` allowed (not `<strong>`/`<em>`)
 6. **Workspace Variations**: Some workspaces require parent components for features
 
+### Out of Scope
+
+- **Delete operations**: Excluded due to risk of irreversible data loss from automated agents. May be added in future with explicit confirmation workflows.
+
 ### Entity Type Summary (from discovery)
 
 | Entity Type   | Fields | Settable | Required | Notes |
@@ -121,6 +125,8 @@ Users need to discover what entity types are available in their workspace and wh
   - Return error indicating unsupported entity type with list of valid types
 - What happens when workspace configuration changes mid-session?
   - Cached config is used; provide `pb_refresh_config` tool to force refresh
+- What happens when ProductBoard API returns rate limit error (HTTP 429)?
+  - Return clear error to caller including retry-after duration; no automatic retry
 
 ## Requirements *(mandatory)*
 
@@ -130,7 +136,7 @@ Users need to discover what entity types are available in their workspace and wh
 - **FR-001**: System MUST support create operation for entity types: objective, product, component, feature, subfeature, releaseGroup, release, company
 - **FR-002**: System MUST support get/read operation for all entity types including user
 - **FR-003**: System MUST support update operation for entity types with settable fields
-- **FR-004**: System MUST support list operation with pagination for all entity types
+- **FR-004**: System MUST support list operation with pagination for all entity types (default: 100 items per page)
 - **FR-005**: System MUST support search operation for entity types that support search (features, subfeatures, objectives)
 
 **Configuration-Based Validation**:
@@ -167,6 +173,14 @@ Users need to discover what entity types are available in their workspace and wh
 - **SC-004**: Zero API rejections due to read-only field assignment when using MCP validation
 - **SC-005**: Existing feature/subfeature tests continue to pass
 - **SC-006**: Live tests successfully create objective, component, and release entities
+
+## Clarifications
+
+### Session 2025-12-15
+
+- Q: Should MCP support delete operations for entities? → A: No, delete excluded from scope (too risky for automated agents)
+- Q: How should MCP handle API rate limit errors (HTTP 429)? → A: Return clear error to caller with retry-after guidance
+- Q: What should be the default page size for list operations? → A: 100 items (balanced efficiency)
 
 ## Assumptions
 
