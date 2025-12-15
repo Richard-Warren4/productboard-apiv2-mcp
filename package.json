@@ -24,7 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "vitest run tests/live --reporter=verbose",
-    "test:unit": "vitest run tests/unit"
+    "test:unit": "vitest run tests/unit",
+    "test:mcp": "node scripts/mcp-test.js"
   },
   "keywords": [
     "mcp",

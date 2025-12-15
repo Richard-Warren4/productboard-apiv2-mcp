@@ -110,6 +110,7 @@ When executing this checklist, record:
 | Date | Tester | Commit | Result | Notes |
 |------|--------|--------|--------|-------|
 | 2025-12-15 | Claude | 0ea175a | PASS | Fixed config single entity type bug |
+| 2025-12-15 | Claude | a608c4d | PASS | 10/10 tests pass, added npm run test:mcp script |
 
 ## Adding New Test Cases
 
@@ -121,12 +122,22 @@ When a bug is discovered in production:
 
 ## Quick Smoke Test
 
-For rapid validation, run these 5 tests minimum:
+For rapid validation, run the automated MCP test script:
 
+```bash
+npm run test:mcp
+```
+
+This runs 10 automated tests covering:
 1. `pb_get_config(entityType: "feature")` - Config works for single type
 2. `pb_search_features(statusNames: ["In progress"])` - Search with exact status name
 3. `pb_entity_types()` - Lists all entity types
-4. `pb_get_relationships(featureId: "[valid-id]")` - Gets relationships
-5. `pb_create_relationship(entityId, "link", targetId)` - Creates relationship
+4. `pb_get_relationships(featureId)` - Gets relationships
+5. `pb_list_features()` - Lists features with pagination
+6. Error handling for invalid status names
+7. Case sensitivity verification
+8. `pb_list_products()` - Lists products
+9. `pb_entity_search(type: "objective")` - Searches objectives
+10. `pb_get_entity(id)` - Auto-detects entity type
 
-If all 5 pass, the core functionality is working.
+If all 10 pass, the core functionality is working.

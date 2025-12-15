@@ -92,6 +92,7 @@ npm start          # Run the MCP server (requires PRODUCTBOARD_API_TOKEN)
 npm test           # Run all tests
 npm run test:live  # Run live API integration tests
 npm run test:watch # Run tests in watch mode
+npm run test:mcp   # Run MCP integration smoke tests
 ```
 
 ## Testing
