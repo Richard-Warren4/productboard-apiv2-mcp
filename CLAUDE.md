@@ -16,7 +16,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-15
 ```text
 src/
   client/       # ProductBoard API client (api.ts, types.ts, errors.ts)
-  tools/        # MCP tool implementations (features.ts, entities.ts)
+  tools/        # MCP tool implementations (entities.ts, relationships.ts, config.ts)
   schemas/      # Zod validation schemas (inputs.ts, responses.ts)
   utils/        # Helper utilities (pagination.ts, richtext.ts, validation.ts)
   index.ts      # MCP server entry point
@@ -24,9 +24,9 @@ dist/           # Compiled output (run `npm run build`)
 specs/          # Design documentation
 ```
 
-## MCP Tools Available
+## MCP Tools Available (14 tools)
 
-### Generic Entity Tools (NEW - 004-generic-entity-support)
+### Entity Tools (7 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -34,34 +34,42 @@ specs/          # Design documentation
 | `pb_entity_get` | Get entity by ID (auto-detects type) |
 | `pb_entity_update` | Update any entity (partial update supported) |
 | `pb_entity_list` | List entities of a type with pagination |
-| `pb_entity_search` | Search entities (feature, subfeature, objective) |
+| `pb_entity_search` | Search entities (feature, subfeature, objective) with filters |
 | `pb_entity_types` | List available entity types and field configurations |
 | `pb_refresh_config` | Force refresh of cached configuration |
 
-### Feature-Specific Tools
+### Relationship Tools (4 tools)
 
 | Tool | Description |
 |------|-------------|
-| `pb_list_features` | List features with filters |
-| `pb_get_feature` | Get feature by ID or name |
-| `pb_create_feature` | Create a new feature |
-| `pb_update_feature` | Update feature properties |
-| `pb_search_features` | Search features with filters |
+| `pb_get_relationships` | Get entity relationships |
+| `pb_create_relationship` | Create a relationship (link features to objectives, create dependencies) |
+| `pb_set_relationship` | Set/replace a single-target relationship |
+| `pb_remove_relationship` | Remove a relationship |
 
-### Other Tools
+### Configuration Tools (3 tools)
 
 | Tool | Description |
 |------|-------------|
-| `pb_list_subfeatures` | List subfeatures for a feature |
-| `pb_create_subfeature` | Create a subfeature |
-| `pb_update_subfeature` | Update subfeature properties |
 | `pb_get_config` | Get entity field configuration |
 | `pb_list_products` | List products |
 | `pb_list_components` | List components |
-| `pb_get_relationships` | Get entity relationships |
-| `pb_create_relationship` | **Create a relationship (link features to objectives, create dependencies)** |
-| `pb_set_relationship` | Set/replace a single-target relationship |
-| `pb_remove_relationship` | Remove a relationship |
+
+### Migration from Type-Specific Tools
+
+The following type-specific tools have been consolidated into generic entity tools:
+
+| Old Tool | New Tool |
+|----------|----------|
+| `pb_list_features` | `pb_entity_list({ entityType: "feature" })` |
+| `pb_get_feature` | `pb_entity_get({ id })` |
+| `pb_create_feature` | `pb_entity_create({ entityType: "feature", fields })` |
+| `pb_update_feature` | `pb_entity_update({ id, fields })` |
+| `pb_search_features` | `pb_entity_search({ entityType: "feature", ... })` |
+| `pb_list_subfeatures` | `pb_entity_search({ entityType: "subfeature", parent: { id } })` |
+| `pb_get_subfeature` | `pb_entity_get({ id })` |
+| `pb_create_subfeature` | `pb_entity_create({ entityType: "subfeature", fields: { parent: { id } } })` |
+| `pb_update_subfeature` | `pb_entity_update({ id, fields })` |
 
 ## Entity Types
 
@@ -137,7 +145,7 @@ claude mcp add --transport stdio productboard \
 
 **Quick Smoke Test (minimum 5 tests):**
 1. `pb_get_config(entityType: "feature")` - Single entity config works
-2. `pb_search_features(statusNames: ["In progress"])` - Search with exact status
+2. `pb_entity_search({ entityType: "feature", statuses: [{name: "In progress"}] })` - Search with exact status
 3. `pb_entity_types()` - Lists all entity types
 4. `pb_get_relationships(featureId: "[id]")` - Gets relationships
 5. `pb_create_relationship(entityId, "link", targetId)` - Creates link
@@ -266,9 +274,9 @@ DELETE /entities/{id}/relationships/{type}/{targetId}
 Path includes `targetId` - no request body.
 
 ## Recent Changes
+- 005-consolidate-tools: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 - 004-generic-entity-support: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 - 003-dynamic-entity-config: Added TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod (runtime validation), native fetch
-- 002-fix-search-stale-results: Added TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod, native fetch
 
 
 <!-- MANUAL ADDITIONS START -->

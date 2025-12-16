@@ -25,8 +25,38 @@ import { extractCursor, hasNextPage } from '../utils/pagination.js';
 /** Raw API response type from getEntityConfiguration */
 type RawApiConfigResponse = Awaited<ReturnType<ProductBoardClient['getEntityConfiguration']>>;
 
-/** Raw field from API (type is string, not FieldType) */
+/**
+ * Raw field from ProductBoard API v2
+ * Note: API returns fields as object keyed by field ID, not array
+ * Schema names like "RichTextFieldValue" need to be mapped to our types
+ * Supports both actual API format (schema) and legacy type definition (type)
+ */
 interface RawApiField {
+  id: string;
+  name: string;
+  path?: string;
+  schema?: string; // e.g., "RichTextFieldValue", "TextFieldValue", "NumberFieldValue"
+  type?: string; // Legacy format support
+  displayName?: string; // Legacy format support
+  required?: boolean; // Legacy format support
+  readOnly?: boolean; // Legacy format support
+  lifecycle?: {
+    create?: { set?: boolean };
+    update?: { set?: boolean; clear?: boolean };
+    patch?: { set?: boolean; clear?: boolean };
+  };
+  constraints?: {
+    required?: boolean;
+    maxLength?: number;
+  };
+  links?: { self: string | null };
+  options?: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Normalized field for internal use
+ */
+interface NormalizedField {
   id: string;
   name: string;
   displayName: string;
@@ -34,6 +64,80 @@ interface RawApiField {
   required: boolean;
   readOnly: boolean;
   options?: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Map ProductBoard schema names to our field types
+ */
+const SCHEMA_TO_TYPE: Record<string, string> = {
+  TextFieldValue: 'text',
+  RichTextFieldValue: 'richtext',
+  NumberFieldValue: 'number',
+  BooleanFieldValue: 'boolean',
+  DateFieldValue: 'date',
+  DateTimeFieldValue: 'datetime',
+  StatusFieldValue: 'status',
+  MemberFieldValue: 'member',
+  TeamFieldValue: 'team',
+  TeamsFieldValue: 'team',
+  SingleSelectFieldValue: 'single_select',
+  MultiSelectFieldValue: 'multi_select',
+  EntityReferenceFieldValue: 'entityReference',
+  HealthFieldValue: 'health',
+  ProgressFieldValue: 'progress',
+  TimeframeFieldValue: 'timeframe',
+};
+
+/**
+ * Convert API field object to normalized field array
+ * API returns: { "name": { id, name, schema, ... }, "status": { ... } }
+ * We need: [{ id, name, displayName, type, required, readOnly }, ...]
+ * @exported for use by entities.ts
+ */
+export function normalizeFields(fieldsObj: Record<string, RawApiField> | RawApiField[] | undefined): NormalizedField[] {
+  if (!fieldsObj) return [];
+
+  // If already an array, normalize each field
+  if (Array.isArray(fieldsObj)) {
+    return fieldsObj.map(normalizeField);
+  }
+
+  // Convert object to array
+  return Object.values(fieldsObj).map(normalizeField);
+}
+
+/**
+ * Normalize a single field from API format to our format
+ * Handles both actual API format (schema) and legacy type definition (type)
+ */
+function normalizeField(field: RawApiField): NormalizedField {
+  // Determine type: prefer schema mapping, fall back to type property, then unknown
+  let type: string;
+  if (field.schema) {
+    type = SCHEMA_TO_TYPE[field.schema] ?? field.schema.replace('FieldValue', '').toLowerCase();
+  } else if (field.type) {
+    type = field.type;
+  } else {
+    type = 'unknown';
+  }
+
+  // Determine readOnly: check lifecycle if available, fall back to readOnly property
+  const isReadOnly = field.lifecycle
+    ? !field.lifecycle?.update?.set && !field.lifecycle?.patch?.set
+    : field.readOnly ?? false;
+
+  // Determine required: check constraints if available, fall back to required property
+  const isRequired = field.constraints?.required ?? field.required ?? false;
+
+  return {
+    id: field.id,
+    name: field.name,
+    displayName: field.displayName ?? field.name, // Use displayName if available, else name
+    type,
+    required: isRequired,
+    readOnly: isReadOnly,
+    options: field.options,
+  };
 }
 
 /**
@@ -99,9 +203,9 @@ function isKnownFieldType(type: string): type is FieldType {
 /**
  * Format a field definition for AI-readable output.
  * Includes type, required status, and options for select fields.
- * Accepts raw API field type (string) and filters unknown types.
+ * Accepts normalized field and filters unknown types.
  */
-function formatFieldForDisplay(field: RawApiField): Record<string, unknown> | null {
+function formatFieldForDisplay(field: NormalizedField): Record<string, unknown> | null {
   // Skip unknown field types silently (FR-008)
   if (!isKnownFieldType(field.type)) {
     return null;
@@ -126,10 +230,13 @@ function formatFieldForDisplay(field: RawApiField): Record<string, unknown> | nu
   return formatted;
 }
 
-/** Raw entity config from API */
+/**
+ * Raw entity config from API
+ * Note: fields can be object keyed by field ID or array
+ */
 interface RawApiEntityConfig {
   type: string;
-  fields: RawApiField[];
+  fields: Record<string, RawApiField> | RawApiField[];
 }
 
 /**
@@ -137,15 +244,18 @@ interface RawApiEntityConfig {
  * Works with raw API response type.
  */
 function formatConfigForDisplay(config: RawApiEntityConfig): Record<string, unknown> {
-  const fields = config.fields
+  // Normalize fields from API format (object or array) to array of normalized fields
+  const fieldsArray = normalizeFields(config.fields);
+
+  const fields = fieldsArray
     .map(formatFieldForDisplay)
     .filter((f): f is Record<string, unknown> => f !== null);
 
-  const requiredFields = config.fields
+  const requiredFields = fieldsArray
     .filter((f) => f.required && isKnownFieldType(f.type))
     .map((f) => f.name);
 
-  const selectFields = config.fields
+  const selectFields = fieldsArray
     .filter((f) => ['status', 'single_select', 'multi_select', 'singleSelect', 'multiSelect'].includes(f.type))
     .filter((f) => f.options && f.options.length > 0)
     .map((f) => ({
@@ -279,12 +389,16 @@ export function registerConfigTools(server: McpServer, client: ProductBoardClien
         });
 
         const result = {
-          components: response.data.map((c) => ({
-            id: c.id,
-            name: c.name,
-            description: c.description?.value ?? '',
-            productId: c.product?.id ?? null,
-          })),
+          components: response.data.map((c) => {
+            // API v2 returns name under fields, not at top level
+            const fields = (c as unknown as { fields?: { name?: string; description?: string } }).fields;
+            return {
+              id: c.id,
+              name: fields?.name ?? c.name ?? 'Unnamed',
+              description: fields?.description ?? c.description?.value ?? '',
+              productId: c.product?.id ?? null,
+            };
+          }),
           totalReturned: response.data.length,
           appliedFilters: input.productId ? { productId: input.productId } : undefined,
           nextCursor: extractCursor(response.links.next) ?? null,

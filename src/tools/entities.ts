@@ -33,7 +33,7 @@ import {
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 import { validateRichtext } from '../utils/richtext.js';
 import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
-import { getSessionCached, clearSessionCache } from './config.js';
+import { getSessionCached, clearSessionCache, normalizeFields } from './config.js';
 
 /**
  * Extract parent ID from relationships
@@ -41,6 +41,36 @@ import { getSessionCached, clearSessionCache } from './config.js';
 function getParentId(entity: GenericEntity): string | undefined {
   const parentRel = entity.relationships?.data?.find((r) => r.type === 'parent');
   return parentRel?.target?.id;
+}
+
+/**
+ * Generate ProductBoard web UI URL for an entity
+ * Falls back to API URL if html link not available
+ */
+function getProductBoardUrl(entity: GenericEntity): string {
+  // Prefer html link if available
+  if (entity.links.html) {
+    return entity.links.html;
+  }
+
+  // Construct web UI URL based on entity type
+  // Note: This may redirect to workspace-specific URL
+  const baseUrl = 'https://app.productboard.com';
+  const typeMap: Record<string, string> = {
+    feature: 'feature-board/id',
+    objective: 'roadmap/objective',
+    product: 'product',
+    component: 'component',
+    subfeature: 'feature-board/id', // Subfeatures use same path as features
+  };
+
+  const path = typeMap[entity.type];
+  if (path) {
+    return `${baseUrl}/${path}/${entity.id}`;
+  }
+
+  // Fallback to API URL for unknown types
+  return entity.links.self;
 }
 
 /**
@@ -56,7 +86,7 @@ function formatEntity(entity: GenericEntity): Record<string, unknown> {
     name: fields.name ?? 'Unnamed',
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,
-    productboardUrl: entity.links.html ?? entity.links.self,
+    productboardUrl: getProductBoardUrl(entity),
   };
 
   // Add optional standard fields if present
@@ -550,22 +580,24 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         // API returns array for all types, single object for specific type
         const configArray = Array.isArray(config.data) ? config.data : [config.data];
         const entityTypes = configArray.map((c) => {
+          // Normalize fields from API format (object keyed by ID) to array
+          const fieldsArray = normalizeFields(c.fields);
           const base: Record<string, unknown> = {
             type: c.type,
-            fieldCount: c.fields.length,
-            settableFieldCount: c.fields.filter((f) => !f.readOnly).length,
-            requiredFieldCount: c.fields.filter((f) => f.required && !f.readOnly).length,
+            fieldCount: fieldsArray.length,
+            settableFieldCount: fieldsArray.filter((f) => !f.readOnly).length,
+            requiredFieldCount: fieldsArray.filter((f) => f.required && !f.readOnly).length,
           };
 
           if (input.includeFields) {
-            base.fields = c.fields.map((f) => ({
+            base.fields = fieldsArray.map((f) => ({
               id: f.id,
               name: f.name,
               displayName: f.displayName,
               type: f.type,
               required: f.required,
               readOnly: f.readOnly,
-              options: f.options?.map((o) => o.name),
+              options: f.options?.map((o: { name: string }) => o.name),
             }));
           }
 

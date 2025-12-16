@@ -29,16 +29,16 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 **Edge Cases Discovered**:
 - Single entity type returns object, not array (fixed 2025-12-15)
 
-### 2. Feature Operations
+### 2. Feature Operations (via Generic Entity Tools)
 
 | Test | User Prompt | Expected Result |
 |------|-------------|-----------------|
-| 2.1 | "List features in ProductBoard" | Returns paginated list of features |
-| 2.2 | "Get feature by ID [use valid ID]" | Returns feature with all fields |
-| 2.3 | "Search for features with status 'In progress'" | Returns matching features (note: case-sensitive!) |
-| 2.4 | "Search for features owned by [email]" | Returns features owned by that user |
-| 2.5 | "Create a test feature named 'MCP Test Feature'" | Creates feature, returns ID |
-| 2.6 | "Update feature [ID] status to 'Candidate'" | Updates feature successfully |
+| 2.1 | "List features in ProductBoard" | Uses `pb_entity_list(entityType: "feature")`, returns paginated list |
+| 2.2 | "Get feature by ID [use valid ID]" | Uses `pb_entity_get(id)`, returns feature with all fields |
+| 2.3 | "Search for features with status 'In progress'" | Uses `pb_entity_search`, returns matching features (note: case-sensitive!) |
+| 2.4 | "Search for features owned by [email]" | Uses `pb_entity_search(owners)`, returns features owned by that user |
+| 2.5 | "Create a test feature named 'MCP Test Feature'" | Uses `pb_entity_create`, creates feature, returns ID |
+| 2.6 | "Update feature [ID] status to 'Candidate'" | Uses `pb_entity_update`, updates feature successfully |
 
 **Edge Cases Discovered**:
 - Status names are case-sensitive: "In progress" works, "In Progress" fails (discovered 2025-12-15)
@@ -73,13 +73,13 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 - PUT only works for single-target relationships like 'parent'
 - 'link' type is for non-hierarchical connections (feature to objective)
 
-### 5. Subfeature Operations
+### 5. Subfeature Operations (via Generic Entity Tools)
 
 | Test | User Prompt | Expected Result |
 |------|-------------|-----------------|
-| 5.1 | "List subfeatures for feature [ID]" | Returns subfeatures under parent |
-| 5.2 | "Create a subfeature under feature [ID]" | Creates subfeature with parent relationship |
-| 5.3 | "Update subfeature [ID] description" | Updates subfeature |
+| 5.1 | "List subfeatures for feature [ID]" | Uses `pb_entity_search(entityType: "subfeature", parent: {id})`, returns subfeatures |
+| 5.2 | "Create a subfeature under feature [ID]" | Uses `pb_entity_create(entityType: "subfeature", fields: {parent: {id}})` |
+| 5.3 | "Update subfeature [ID] description" | Uses `pb_entity_update(id, fields)` |
 
 ### 6. Error Handling
 
@@ -130,14 +130,14 @@ npm run test:mcp
 
 This runs 10 automated tests covering:
 1. `pb_get_config(entityType: "feature")` - Config works for single type
-2. `pb_search_features(statusNames: ["In progress"])` - Search with exact status name
+2. `pb_entity_search(entityType: "feature", statuses: [{name: "In progress"}])` - Search with exact status name
 3. `pb_entity_types()` - Lists all entity types
 4. `pb_get_relationships(featureId)` - Gets relationships
-5. `pb_list_features()` - Lists features with pagination
+5. `pb_entity_list(entityType: "feature")` - Lists features with pagination
 6. Error handling for invalid status names
 7. Case sensitivity verification
 8. `pb_list_products()` - Lists products
-9. `pb_entity_search(type: "objective")` - Searches objectives
-10. `pb_get_entity(id)` - Auto-detects entity type
+9. `pb_entity_search(entityType: "objective")` - Searches objectives
+10. `pb_entity_get(id)` - Auto-detects entity type
 
 If all 10 pass, the core functionality is working.

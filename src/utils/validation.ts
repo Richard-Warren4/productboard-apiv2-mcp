@@ -8,6 +8,7 @@
  */
 
 import type { ValidationResult, ValidationWarning } from '../client/types.js';
+import { normalizeFields } from '../tools/config.js';
 
 /** Raw API field type (accepts string for type since API returns generic strings) */
 interface RawFieldConfig {
@@ -288,7 +289,7 @@ function validateTeamValue(fieldName: string, value: unknown): ValidationWarning
  * Returns null if config fetch fails (graceful degradation).
  */
 export async function getConfigForValidation(
-  client: { getEntityConfiguration: (type?: string) => Promise<{ data: Array<{ type: string; fields: RawFieldConfig[] }> }> },
+  client: { getEntityConfiguration: (type?: string) => Promise<{ data: unknown }> },
   entityType: string,
   getSessionCached: <T>(key: string, fn: () => Promise<T>) => Promise<T>
 ): Promise<RawFieldConfig[] | null> {
@@ -296,8 +297,24 @@ export async function getConfigForValidation(
     const config = await getSessionCached(`config:${entityType}`, () =>
       client.getEntityConfiguration(entityType)
     );
-    const entityConfig = config.data.find((c) => c.type === entityType);
-    return entityConfig?.fields ?? null;
+
+    // Handle both array (all types) and object (single type) responses
+    let entityConfig: { type: string; fields: unknown } | undefined;
+    if (Array.isArray(config.data)) {
+      entityConfig = config.data.find((c: { type: string }) => c.type === entityType);
+    } else if (config.data && typeof config.data === 'object') {
+      // Single entity type returns object directly
+      entityConfig = config.data as { type: string; fields: unknown };
+    }
+
+    if (!entityConfig) {
+      return null;
+    }
+
+    // Normalize fields from API format (object keyed by ID) to array
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizedFields = normalizeFields(entityConfig.fields as any);
+    return normalizedFields;
   } catch (error) {
     // Graceful degradation - validation becomes no-op
     console.error(`Config fetch failed for ${entityType}:`, error);

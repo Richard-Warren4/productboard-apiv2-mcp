@@ -13,11 +13,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { createClient, ProductBoardClient } from './client/api.js';
 import { ProductBoardError } from './client/errors.js';
-import { registerFeatureTools } from './tools/features.js';
-import { registerSearchTools } from './tools/search.js';
 import { registerRelationshipTools } from './tools/relationships.js';
 import { registerConfigTools } from './tools/config.js';
-import { registerSubfeatureTools } from './tools/subfeatures.js';
 import { registerEntityTools } from './tools/entities.js';
 
 // Server metadata
@@ -60,13 +57,10 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Register all tools
-  registerFeatureTools(server, client);
-  registerSearchTools(server, client);
+  // Register all tools (consolidated to 14 tools)
   registerRelationshipTools(server, client);
   registerConfigTools(server, client);
-  registerSubfeatureTools(server, client);
-  registerEntityTools(server, client); // Generic entity tools (US1, US4, US5)
+  registerEntityTools(server, client);
 
   // Connect to transport
   const transport = new StdioServerTransport();
