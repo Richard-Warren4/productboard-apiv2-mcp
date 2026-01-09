@@ -17,7 +17,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { ProductBoardClient } from '../client/api.js';
-import type { GenericEntity, ValidationWarning, WritableEntityType, SearchableEntityType } from '../client/types.js';
+import type { GenericEntity, ValidationWarning, WritableEntityType, SearchableEntityType, CustomFieldMapping } from '../client/types.js';
 import { toMcpError, toMcpSuccess } from '../client/errors.js';
 import {
   EntityTypeSchema,
@@ -33,6 +33,7 @@ import {
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 import { validateRichtext } from '../utils/richtext.js';
 import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
+import { buildCustomFieldMapping, transformCustomFields } from '../utils/custom-fields.js';
 import { getSessionCached, clearSessionCache, normalizeFields } from './config.js';
 
 /**
@@ -75,8 +76,11 @@ function getProductBoardUrl(entity: GenericEntity): string {
 
 /**
  * Format a generic entity for AI-readable output
+ *
+ * @param entity - The entity to format
+ * @param customFieldMapping - Optional custom field mapping for transforming UUID keys to names
  */
-function formatEntity(entity: GenericEntity): Record<string, unknown> {
+function formatEntity(entity: GenericEntity, customFieldMapping?: CustomFieldMapping): Record<string, unknown> {
   const fields = entity.fields;
 
   // Extract common fields
@@ -114,11 +118,20 @@ function formatEntity(entity: GenericEntity): Record<string, unknown> {
     formatted.parent = parentId;
   }
 
-  // Add any other non-standard fields
-  const standardFields = ['name', 'description', 'status', 'owner', 'teams', 'archived', 'parent'];
-  for (const [key, value] of Object.entries(fields)) {
-    if (!standardFields.includes(key) && value !== undefined && value !== null) {
-      formatted[key] = value;
+  // Transform custom fields if mapping is provided
+  if (customFieldMapping && customFieldMapping.byId.size > 0) {
+    const customFields = transformCustomFields(fields, customFieldMapping);
+    if (Object.keys(customFields).length > 0) {
+      formatted.customFields = customFields;
+    }
+  } else {
+    // Fallback: Add any other non-standard fields with UUID keys
+    // This maintains backwards compatibility when no mapping is available
+    const standardFields = ['name', 'description', 'status', 'owner', 'teams', 'archived', 'parent'];
+    for (const [key, value] of Object.entries(fields)) {
+      if (!standardFields.includes(key) && value !== undefined && value !== null) {
+        formatted[key] = value;
+      }
     }
   }
 
@@ -127,26 +140,80 @@ function formatEntity(entity: GenericEntity): Record<string, unknown> {
 
 /**
  * Format a list of entities for AI-readable output
+ *
+ * @param entities - Array of entities to format
+ * @param entityType - The type of entities
+ * @param pagination - Pagination info
+ * @param customFieldMapping - Optional custom field mapping for transforming UUID keys to names
  */
 function formatEntityList(
   entities: GenericEntity[],
   entityType: string,
-  pagination: { nextCursor?: string; hasMore: boolean }
+  pagination: { nextCursor?: string; hasMore: boolean },
+  customFieldMapping?: CustomFieldMapping
 ): Record<string, unknown> {
   return {
     entityType,
-    entities: entities.map((e) => ({
-      id: e.id,
-      type: e.type,
-      name: e.fields.name ?? 'Unnamed',
-      status: e.fields.status?.name ?? 'No status',
-      owner: e.fields.owner?.name ?? e.fields.owner?.email ?? 'Unassigned',
-      archived: e.fields.archived ?? false,
-    })),
+    entities: entities.map((e) => {
+      const formatted: Record<string, unknown> = {
+        id: e.id,
+        type: e.type,
+        name: e.fields.name ?? 'Unnamed',
+        status: e.fields.status?.name ?? 'No status',
+        owner: e.fields.owner?.name ?? e.fields.owner?.email ?? 'Unassigned',
+        archived: e.fields.archived ?? false,
+      };
+
+      // Add custom fields if mapping is provided
+      if (customFieldMapping && customFieldMapping.byId.size > 0) {
+        const customFields = transformCustomFields(e.fields, customFieldMapping);
+        if (Object.keys(customFields).length > 0) {
+          formatted.customFields = customFields;
+        }
+      }
+
+      return formatted;
+    }),
     totalReturned: entities.length,
     nextCursor: pagination.nextCursor ?? null,
     hasMoreResults: pagination.hasMore,
   };
+}
+
+/**
+ * Get or build custom field mapping for an entity type.
+ * Uses session cache to avoid rebuilding on every request.
+ *
+ * @param client - ProductBoard API client
+ * @param entityType - Entity type to get mapping for
+ * @returns Custom field mapping or undefined if config fetch fails
+ */
+async function getCustomFieldMapping(
+  client: ProductBoardClient,
+  entityType: string
+): Promise<CustomFieldMapping | undefined> {
+  try {
+    // Only feature and subfeature entities have custom fields
+    if (entityType !== 'feature' && entityType !== 'subfeature') {
+      return undefined;
+    }
+
+    // Get cached config or fetch fresh
+    const cacheKey = `customFieldMapping:${entityType}`;
+    return await getSessionCached(cacheKey, async () => {
+      const validEntityType = entityType as 'feature' | 'subfeature';
+      const config = await client.getEntityConfiguration(validEntityType);
+      const configData = Array.isArray(config.data) ? config.data[0] : config.data;
+      if (configData?.fields === undefined || configData?.fields === null) {
+        return { byId: new Map(), byName: new Map() };
+      }
+      // Fields can be object keyed by ID or array - buildCustomFieldMapping handles both
+      return buildCustomFieldMapping(configData.fields as unknown as Record<string, { id: string; name: string; schema?: string; options?: Array<{ id: string; name: string; color?: string }> }>);
+    });
+  } catch {
+    // Config fetch failed - continue without custom field transformation
+    return undefined;
+  }
 }
 
 /**
@@ -327,6 +394,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const response = await client.getEntity(input.id);
         const entity = response.data;
 
+        // Get custom field mapping for transformation (feature/subfeature only)
+        const customFieldMapping = await getCustomFieldMapping(client, entity.type);
+
         // Get relationships if possible
         type RelItem = { type: string; target: { id: string; type: string } };
         let relationshipsArray: RelItem[] = [];
@@ -347,7 +417,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         }
 
         const result = {
-          entity: formatEntity(entity),
+          entity: formatEntity(entity, customFieldMapping),
           relationships: grouped,
           summary: {
             totalRelationships: relationshipsArray.length,
@@ -464,6 +534,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         // Validate input
         const input = EntityListInputSchema.parse(args);
 
+        // Get custom field mapping for transformation (feature/subfeature only)
+        const customFieldMapping = await getCustomFieldMapping(client, input.entityType);
+
         // Fetch entities (pageSize not supported by API - always returns 100)
         const response = await client.listEntities(input.entityType, {
           pageCursor: input.pageCursor,
@@ -472,7 +545,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const result = formatEntityList(response.data, input.entityType, {
           nextCursor: extractCursor(response.links.next),
           hasMore: hasNextPage(response),
-        });
+        }, customFieldMapping);
 
         return toMcpSuccess(result);
       } catch (error) {
@@ -507,6 +580,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const input = EntitySearchInputSchema.parse(args);
         const entityType = input.entityType as SearchableEntityType;
 
+        // Get custom field mapping for transformation (feature/subfeature only)
+        const customFieldMapping = await getCustomFieldMapping(client, entityType);
+
         // Build filters (all are direct properties under `data`, NOT in a filter wrapper)
         const filters: {
           name?: string;
@@ -532,7 +608,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const result = formatEntityList(response.data, entityType, {
           nextCursor: extractCursor(response.links.next),
           hasMore: hasNextPage(response),
-        });
+        }, customFieldMapping);
 
         // Add applied filters info
         const appliedFilters: Record<string, unknown> = {};

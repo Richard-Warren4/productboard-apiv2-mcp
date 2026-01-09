@@ -572,3 +572,98 @@ export interface SearchFeaturesInput {
   componentId?: string;
   pageCursor?: string;
 }
+
+// =============================================================================
+// Custom Field Types (Feature 006)
+// =============================================================================
+
+/**
+ * Custom field types supported by ProductBoard API v2.
+ * These map from the API's schema names (e.g., "NumberFieldValue") to our type system.
+ */
+export type CustomFieldType =
+  | 'number'
+  | 'text'
+  | 'richtext'
+  | 'single_select'
+  | 'multi_select'
+  | 'member'
+  | 'boolean'
+  | 'date'
+  | 'datetime';
+
+/**
+ * Option for single_select and multi_select custom fields.
+ */
+export interface SelectOption {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+/**
+ * Configuration metadata for a single custom field from ProductBoard API.
+ * Extracted from the entity configuration endpoint.
+ */
+export interface CustomFieldConfig {
+  /** UUID of the custom field (e.g., "d4ea8854-c960-458a-bf5d-05fda4b22a24") */
+  id: string;
+  /** Display name of the field (e.g., "Reach", "Impact") */
+  name: string;
+  /** Field value type */
+  type: CustomFieldType;
+  /** Available options for single_select/multi_select fields */
+  options?: SelectOption[];
+}
+
+/**
+ * In-memory mapping for fast custom field lookup.
+ * Built once per session from entity configuration.
+ */
+export interface CustomFieldMapping {
+  /** Lookup by UUID → config (for transforming API responses) */
+  byId: Map<string, CustomFieldConfig>;
+  /** Lookup by name → config (for filter validation, case-insensitive keys) */
+  byName: Map<string, CustomFieldConfig>;
+}
+
+/**
+ * Select field value as it appears in transformed entity responses.
+ */
+export interface SelectFieldValue {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+/**
+ * Custom field value as it appears in transformed entity responses.
+ * The value type depends on the field type.
+ */
+export type CustomFieldValue =
+  | number                    // For number fields
+  | string                    // For text/richtext fields
+  | boolean                   // For boolean fields
+  | SelectFieldValue          // For single_select fields
+  | SelectFieldValue[]        // For multi_select fields
+  | MemberFieldValue          // For member fields
+  | null;                     // Empty/unset fields
+
+/**
+ * Filter operators for custom field filtering.
+ * Numeric operators (<, <=, >, >=) only valid for number fields.
+ */
+export type CustomFieldFilterOperator = '=' | '!=' | '<' | '<=' | '>' | '>=';
+
+/**
+ * Filter specification for client-side custom field filtering.
+ * Used in pb_entity_search to filter results by custom field values.
+ */
+export interface CustomFieldFilter {
+  /** Field name (not UUID) - case-insensitive matching */
+  field: string;
+  /** Comparison operator */
+  operator: CustomFieldFilterOperator;
+  /** Value to compare against */
+  value: number | string | boolean;
+}
