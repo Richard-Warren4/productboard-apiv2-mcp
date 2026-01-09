@@ -1,6 +1,6 @@
 # productboard-apiv2-mcp Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-12-15
+Auto-generated from all feature plans. Last updated: 2026-01-09
 
 ## Active Technologies
 - N/A (API client only) (002-fix-search-stale-results)
@@ -8,6 +8,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-15
 - In-memory session cache (no persistence) (003-dynamic-entity-config)
 - TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch (004-generic-entity-support)
 - In-memory session cache for entity configuration (no persistence) (004-generic-entity-support)
+- In-memory session cache for UUID→name mapping (no persistence) (006-custom-fields-support)
 
 - TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod, native fetch
 
@@ -34,7 +35,7 @@ specs/          # Design documentation
 | `pb_entity_get` | Get entity by ID (auto-detects type) |
 | `pb_entity_update` | Update any entity (partial update supported) |
 | `pb_entity_list` | List entities of a type with pagination |
-| `pb_entity_search` | Search entities (feature, subfeature, objective) with filters |
+| `pb_entity_search` | Search entities (feature, subfeature, objective) with filters and custom field filtering |
 | `pb_entity_types` | List available entity types and field configurations |
 | `pb_refresh_config` | Force refresh of cached configuration |
 
@@ -235,6 +236,54 @@ See `.specify/memory/constitution.md` for the authoritative reference.
 
 **Note**: Team filtering is NOT supported by the search endpoint. Use client-side filtering after fetching results.
 
+### Custom Field Filtering (Client-Side)
+
+Custom fields (e.g., DRICE scores: Reach, Impact, Confidence, Effort) are returned in entity responses under `customFields` with human-readable field names.
+
+**Custom fields in responses**:
+```json
+{
+  "id": "feature-uuid",
+  "name": "My Feature",
+  "customFields": {
+    "Reach": 75,
+    "Impact": 50,
+    "Confidence": 80,
+    "Effort": 30,
+    "Priority": { "id": "opt-123", "name": "High" }
+  }
+}
+```
+
+**Filtering by custom fields** (client-side, via `pb_entity_search`):
+```json
+{
+  "entityType": "feature",
+  "customFieldFilters": [
+    { "field": "Reach", "operator": ">=", "value": 50 },
+    { "field": "Priority", "operator": "=", "value": "High" }
+  ]
+}
+```
+
+**Supported operators**:
+| Operator | Valid For | Description |
+|----------|-----------|-------------|
+| `=` | All types | Equal to value |
+| `!=` | All types | Not equal to value |
+| `<` | Number only | Less than |
+| `<=` | Number only | Less than or equal |
+| `>` | Number only | Greater than |
+| `>=` | Number only | Greater than or equal |
+
+**Important notes**:
+- Field names are **case-insensitive** (e.g., "reach" matches "Reach")
+- Select fields match by **option name** (case-insensitive)
+- Filtering is done **client-side** after fetching all results
+- Multi-page fetch (up to 50 pages/5000 results) when filters are provided
+- Response includes `filteringInfo` with `totalBeforeFiltering`, `totalAfterFiltering`, `pagesFetched`
+- Invalid field names return error with "Did you mean?" suggestions
+
 ### Create Relationship (POST /entities/{id}/relationships)
 
 **Use this to link features to objectives, create dependencies, etc.**
@@ -274,9 +323,9 @@ DELETE /entities/{id}/relationships/{type}/{targetId}
 Path includes `targetId` - no request body.
 
 ## Recent Changes
+- 006-custom-fields-support: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 - 005-consolidate-tools: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 - 004-generic-entity-support: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
-- 003-dynamic-entity-config: Added TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod (runtime validation), native fetch
 
 
 <!-- MANUAL ADDITIONS START -->

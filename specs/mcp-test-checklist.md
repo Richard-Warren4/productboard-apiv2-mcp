@@ -81,21 +81,40 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 | 5.2 | "Create a subfeature under feature [ID]" | Uses `pb_entity_create(entityType: "subfeature", fields: {parent: {id}})` |
 | 5.3 | "Update subfeature [ID] description" | Uses `pb_entity_update(id, fields)` |
 
-### 6. Error Handling
+### 6. Custom Fields (Feature 006)
 
 | Test | User Prompt | Expected Result |
 |------|-------------|-----------------|
-| 6.1 | "Get feature with ID 'invalid-uuid'" | Returns clear error: entity not found |
-| 6.2 | "Search features with status 'NonExistentStatus'" | Returns error: status not found |
-| 6.3 | "Create a feature without a name" | Returns validation error |
-| 6.4 | "Create a feature without a parent" | May error if workspace requires parent |
+| 6.1 | "List features in ProductBoard" | Returns features with `customFields` object containing named fields (e.g., "Reach", "Impact") |
+| 6.2 | "Get feature [ID] details" | Returns feature with all `customFields` populated with values |
+| 6.3 | "Search features with Reach >= 50" | Uses `customFieldFilters: [{field: "Reach", operator: ">=", value: 50}]`, returns filtered results with `filteringInfo` |
+| 6.4 | "Search features where Priority equals 'High'" | Uses `customFieldFilters` with `=` operator for select fields |
+| 6.5 | "Search features with invalid field name 'Rech'" | Returns error with "Did you mean: Reach?" suggestion |
+| 6.6 | "Search features where Reach > 'invalid'" | Returns error about type mismatch (string vs number) |
 
-### 7. Pagination
+**Edge Cases Discovered**:
+- Custom field names are case-insensitive for filtering (e.g., "reach" matches "Reach")
+- Select fields support filtering by option name (case-insensitive)
+- Multi-select fields return array of values
+- Numeric operators (<, <=, >, >=) only valid for number fields
+- Client-side filtering fetches all pages (up to 50 page limit)
+- Empty/null custom fields are omitted from response
+
+### 7. Error Handling
 
 | Test | User Prompt | Expected Result |
 |------|-------------|-----------------|
-| 7.1 | "List all features (there are more than 100)" | Returns first page with cursor |
-| 7.2 | "Get the next page of features" | Uses cursor to get next page |
+| 7.1 | "Get feature with ID 'invalid-uuid'" | Returns clear error: entity not found |
+| 7.2 | "Search features with status 'NonExistentStatus'" | Returns error: status not found |
+| 7.3 | "Create a feature without a name" | Returns validation error |
+| 7.4 | "Create a feature without a parent" | May error if workspace requires parent |
+
+### 8. Pagination
+
+| Test | User Prompt | Expected Result |
+|------|-------------|-----------------|
+| 8.1 | "List all features (there are more than 100)" | Returns first page with cursor |
+| 8.2 | "Get the next page of features" | Uses cursor to get next page |
 
 ## Recording Test Results
 
@@ -111,6 +130,7 @@ When executing this checklist, record:
 |------|--------|--------|--------|-------|
 | 2025-12-15 | Claude | 0ea175a | PASS | Fixed config single entity type bug |
 | 2025-12-15 | Claude | a608c4d | PASS | 10/10 tests pass, added npm run test:mcp script |
+| 2026-01-09 | Claude | 613846e | PASS | Feature 006: Custom fields support - US1/US2/US3 complete |
 
 ## Adding New Test Cases
 
@@ -141,3 +161,20 @@ This runs 10 automated tests covering:
 10. `pb_entity_get(id)` - Auto-detects entity type
 
 If all 10 pass, the core functionality is working.
+
+### Custom Fields Manual Tests
+
+After automated tests pass, verify custom fields support manually:
+
+1. **View custom fields in list**: `pb_entity_list({ entityType: "feature" })`
+   - Verify each feature has `customFields` object with named keys
+
+2. **View custom fields in search**: `pb_entity_search({ entityType: "feature", statuses: [{name: "In progress"}] })`
+   - Verify results include `customFields` with DRICE scores (if configured)
+
+3. **Filter by custom field**: `pb_entity_search({ entityType: "feature", customFieldFilters: [{ field: "Reach", operator: ">=", value: 50 }] })`
+   - Verify `filteringInfo` shows total before/after filtering
+   - Verify results match filter criteria
+
+4. **Invalid field name**: `pb_entity_search({ entityType: "feature", customFieldFilters: [{ field: "Rech", operator: "=", value: 50 }] })`
+   - Verify error includes "Did you mean: Reach?" suggestion
