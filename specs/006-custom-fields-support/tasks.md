@@ -30,10 +30,10 @@
 
 **CRITICAL**: These tasks MUST complete before any user story can begin.
 
-- [ ] T001 [P] Add CustomFieldConfig, CustomFieldMapping, CustomFieldValue, and CustomFieldFilter type definitions in src/client/types.ts
-- [ ] T002 [P] Create src/utils/custom-fields.ts with buildCustomFieldMapping() function that extracts custom fields from config
-- [ ] T003 Add transformCustomFields() function in src/utils/custom-fields.ts that converts UUID-keyed fields to named customFields object
-- [ ] T004 Export custom-fields utilities from src/utils/custom-fields.ts and add barrel export if needed
+- [x] T001 [P] Add CustomFieldConfig, CustomFieldMapping, CustomFieldValue, and CustomFieldFilter type definitions in src/client/types.ts
+- [x] T002 [P] Create src/utils/custom-fields.ts with buildCustomFieldMapping() function that extracts custom fields from config
+- [x] T003 Add transformCustomFields() function in src/utils/custom-fields.ts that converts UUID-keyed fields to named customFields object
+- [x] T004 Export custom-fields utilities from src/utils/custom-fields.ts and add barrel export if needed
 
 **Checkpoint**: Foundation ready - custom field mapping and transformation utilities available for all user stories.
 
@@ -47,12 +47,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Modify formatEntityList() in src/tools/entities.ts to fetch custom field config via getSessionCached()
-- [ ] T006 [US1] Call transformCustomFields() in formatEntityList() to add customFields to each entity in list results
-- [ ] T007 [US1] Modify formatEntity() in src/tools/entities.ts to call transformCustomFields() for single entity formatting
-- [ ] T008 [US1] Handle empty/null custom field values gracefully in transformCustomFields() - omit or set to null (FR-006)
-- [ ] T009 [US1] Update pb_entity_list tool handler in src/tools/entities.ts to pass config to formatEntityList()
-- [ ] T010 [US1] Update pb_entity_search tool handler in src/tools/entities.ts to pass config to formatEntityList()
+- [x] T005 [US1] Modify formatEntityList() in src/tools/entities.ts to fetch custom field config via getSessionCached()
+- [x] T006 [US1] Call transformCustomFields() in formatEntityList() to add customFields to each entity in list results
+- [x] T007 [US1] Modify formatEntity() in src/tools/entities.ts to call transformCustomFields() for single entity formatting
+- [x] T008 [US1] Handle empty/null custom field values gracefully in transformCustomFields() - omit or set to null (FR-006)
+- [x] T009 [US1] Update pb_entity_list tool handler in src/tools/entities.ts to pass config to formatEntityList()
+- [x] T010 [US1] Update pb_entity_search tool handler in src/tools/entities.ts to pass config to formatEntityList()
 
 **Checkpoint**: `pb_entity_list` and `pb_entity_search` now return `customFields` with human-readable names. US1 is independently testable.
 
@@ -66,18 +66,18 @@
 
 ### Implementation for User Story 2
 
-- [ ] T011 [P] [US2] Add CustomFieldFilterSchema Zod schema in src/schemas/inputs.ts with field (string), operator (enum), value (union) validation
-- [ ] T012 [P] [US2] Add customFieldFilters optional array to EntitySearchInputSchema in src/schemas/inputs.ts
-- [ ] T013 [US2] Add validateCustomFieldFilters() function in src/utils/custom-fields.ts to check field names exist and operators valid for type
-- [ ] T014 [US2] Add applyCustomFieldFilters() function in src/utils/custom-fields.ts to filter entity array by custom field criteria
-- [ ] T015 [US2] Implement numeric operators (=, !=, <, <=, >, >=) in applyCustomFieldFilters() for number fields
-- [ ] T016 [US2] Implement select operators (=, !=) in applyCustomFieldFilters() for single_select and multi_select fields
-- [ ] T017 [US2] Modify pb_entity_search handler in src/tools/entities.ts to validate customFieldFilters before API call
-- [ ] T018 [US2] Modify pb_entity_search handler to fetch all pages when customFieldFilters present (pagination handling)
-- [ ] T019 [US2] Modify pb_entity_search handler to call applyCustomFieldFilters() after API response transformation
-- [ ] T020 [US2] Add filteringInfo metadata (totalBeforeFiltering, totalAfterFiltering, pagesFetched) to search response
-- [ ] T021 [US2] Add clear error messages for invalid field names with "Did you mean?" suggestions (FR-007)
-- [ ] T022 [US2] Add clear error messages for invalid operators per field type (FR-007)
+- [x] T011 [P] [US2] Add CustomFieldFilterSchema Zod schema in src/schemas/inputs.ts with field (string), operator (enum), value (union) validation
+- [x] T012 [P] [US2] Add customFieldFilters optional array to EntitySearchInputSchema in src/schemas/inputs.ts
+- [x] T013 [US2] Add validateCustomFieldFilters() function in src/utils/custom-fields.ts to check field names exist and operators valid for type
+- [x] T014 [US2] Add applyCustomFieldFilters() function in src/utils/custom-fields.ts to filter entity array by custom field criteria
+- [x] T015 [US2] Implement numeric operators (=, !=, <, <=, >, >=) in applyCustomFieldFilters() for number fields
+- [x] T016 [US2] Implement select operators (=, !=) in applyCustomFieldFilters() for single_select and multi_select fields
+- [x] T017 [US2] Modify pb_entity_search handler in src/tools/entities.ts to validate customFieldFilters before API call
+- [x] T018 [US2] Modify pb_entity_search handler to fetch all pages when customFieldFilters present (pagination handling)
+- [x] T019 [US2] Modify pb_entity_search handler to call applyCustomFieldFilters() after API response transformation
+- [x] T020 [US2] Add filteringInfo metadata (totalBeforeFiltering, totalAfterFiltering, pagesFetched) to search response
+- [x] T021 [US2] Add clear error messages for invalid field names with "Did you mean?" suggestions (FR-007)
+- [x] T022 [US2] Add clear error messages for invalid operators per field type (FR-007)
 
 **Checkpoint**: `pb_entity_search` accepts `customFieldFilters` and returns only matching features. US2 is independently testable.
 
@@ -91,10 +91,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Verify formatEntity() already includes all non-standard fields from API response in src/tools/entities.ts
-- [ ] T024 [US3] Ensure pb_entity_get handler passes config to formatEntity() for transformation
-- [ ] T025 [US3] Add customFields output to pb_entity_get response structure (may already be handled by T007)
-- [ ] T026 [US3] Test edge case: feature with some custom fields empty - verify populated fields show values, empty show null
+- [x] T023 [US3] Verify formatEntity() already includes all non-standard fields from API response in src/tools/entities.ts
+- [x] T024 [US3] Ensure pb_entity_get handler passes config to formatEntity() for transformation
+- [x] T025 [US3] Add customFields output to pb_entity_get response structure (may already be handled by T007)
+- [x] T026 [US3] Test edge case: feature with some custom fields empty - verify populated fields show values, empty show null
 
 **Checkpoint**: `pb_entity_get` returns complete `customFields` object. US3 is independently testable.
 
@@ -104,17 +104,17 @@
 
 **Purpose**: MCP integration testing and documentation
 
-- [ ] T027 Build project with `npm run build` and verify no TypeScript errors
-- [ ] T028 Run `npm run lint` and fix any linting issues
-- [ ] T029 [P] Add custom field test scenarios to specs/mcp-test-checklist.md
-- [ ] T030 Execute MCP integration test: pb_entity_list returns customFields for features
-- [ ] T031 Execute MCP integration test: pb_entity_search returns customFields for features
-- [ ] T032 Execute MCP integration test: pb_entity_search with customFieldFilters returns filtered results
-- [ ] T033 Execute MCP integration test: pb_entity_get returns all customFields
-- [ ] T034 Execute MCP integration test: Invalid field name returns helpful error
-- [ ] T035 Execute MCP integration test: Invalid operator for field type returns helpful error
-- [ ] T036 [P] Update CLAUDE.md with custom field filter documentation
-- [ ] T037 Run quickstart.md scenarios to validate examples work
+- [x] T027 Build project with `npm run build` and verify no TypeScript errors
+- [x] T028 Run `npm run lint` and fix any linting issues
+- [x] T029 [P] Add custom field test scenarios to specs/mcp-test-checklist.md
+- [x] T030 Execute MCP integration test: pb_entity_list returns customFields for features
+- [x] T031 Execute MCP integration test: pb_entity_search returns customFields for features
+- [x] T032 Execute MCP integration test: pb_entity_search with customFieldFilters returns filtered results
+- [x] T033 Execute MCP integration test: pb_entity_get returns all customFields
+- [x] T034 Execute MCP integration test: Invalid field name returns helpful error
+- [x] T035 Execute MCP integration test: Invalid operator for field type returns helpful error
+- [x] T036 [P] Update CLAUDE.md with custom field filter documentation
+- [x] T037 Run quickstart.md scenarios to validate examples work
 
 ---
 
