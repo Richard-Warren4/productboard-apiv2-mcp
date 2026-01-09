@@ -19,7 +19,7 @@ import { registerEntityTools } from './tools/entities.js';
 
 // Server metadata
 const SERVER_NAME = 'productboard-mcp';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2.0';
 
 /**
  * Main entry point for the MCP server
