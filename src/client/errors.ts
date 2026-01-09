@@ -90,11 +90,20 @@ export function handleApiError(
   if (errorsArray && errorsArray.length > 0) {
     const firstError = errorsArray[0];
     // Prefer detail, fall back to title, then code
-    message =
-      (firstError.detail as string) ||
-      (firstError.title as string) ||
-      (firstError.code as string) ||
-      'An unknown error occurred';
+    // Handle both string and object values
+    const detail = firstError.detail;
+    const title = firstError.title;
+    const code = firstError.code;
+
+    // Convert to string safely (objects become JSON)
+    const toString = (val: unknown): string | undefined => {
+      if (val === undefined || val === null) return undefined;
+      if (typeof val === 'string') return val;
+      if (typeof val === 'object') return JSON.stringify(val);
+      return String(val);
+    };
+
+    message = toString(detail) || toString(title) || toString(code) || 'An unknown error occurred';
     details = { errors: errorsArray };
   } else {
     // Fallback for non-standard error formats

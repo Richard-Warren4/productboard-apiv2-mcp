@@ -329,4 +329,10 @@ Path includes `targetId` - no request body.
 
 
 <!-- MANUAL ADDITIONS START -->
+
+## Development Principles
+
+### API Documentation Reference
+**ALWAYS** use `.specify/memory/productboard-v2api-ref-urls.md` to find correct ProductBoard API v2 documentation URLs. Do not guess or search for API docs - use the reference file which contains verified URLs.
+
 <!-- MANUAL ADDITIONS END -->

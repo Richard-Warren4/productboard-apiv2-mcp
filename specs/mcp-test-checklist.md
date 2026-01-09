@@ -54,10 +54,12 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 | 3.4 | "Search for objectives" | Returns searchable objectives |
 | 3.5 | "List products in ProductBoard" | Returns products |
 | 3.6 | "List components in ProductBoard" | Returns components |
+| 3.7 | "Create a component named 'Test Component' under product [ID]" | Uses `pb_entity_create(entityType: "component", fields: {name, parent: {id}})`, creates component with parent relationship |
 
 **Edge Cases Discovered**:
 - `initiative` entity type is NOT supported by API v2 (verified 2025-12-15)
 - `pageSize` parameter is not supported, API returns 100 items per page
+- Component creation requires parent product in fields.parent (verified 2026-01-09)
 
 ### 4. Relationship Operations
 
