@@ -178,6 +178,12 @@ export function handleApiError(
 
 /**
  * Create an MCP error response from any error
+ *
+ * Handles:
+ * - ProductBoardError instances
+ * - Plain Error objects
+ * - Plain objects with code/message properties (for validation errors)
+ * - Any other value (converted to string)
  */
 export function toMcpError(error: unknown): {
   content: Array<{ type: 'text'; text: string }>;
@@ -185,6 +191,40 @@ export function toMcpError(error: unknown): {
 } {
   if (error instanceof ProductBoardError) {
     return error.toMcpError();
+  }
+
+  // Handle plain objects with code/message properties (e.g., validation errors)
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    'message' in error
+  ) {
+    const errorObj = error as {
+      code: string;
+      message: string;
+      suggestion?: string;
+      details?: Record<string, unknown>;
+    };
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              error: true,
+              code: errorObj.code,
+              message: errorObj.message,
+              suggestion: errorObj.suggestion,
+              details: errorObj.details,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+      isError: true,
+    };
   }
 
   const message = error instanceof Error ? error.message : String(error);

@@ -33,7 +33,13 @@ import {
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
 import { validateRichtext } from '../utils/richtext.js';
 import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
-import { buildCustomFieldMapping, transformCustomFields } from '../utils/custom-fields.js';
+import {
+  buildCustomFieldMapping,
+  transformCustomFields,
+  validateCustomFieldFilters,
+  applyCustomFieldFilters,
+  type CustomFieldFilterInput,
+} from '../utils/custom-fields.js';
 import { getSessionCached, clearSessionCache, normalizeFields } from './config.js';
 
 /**
@@ -201,8 +207,7 @@ async function getCustomFieldMapping(
     // Get cached config or fetch fresh
     const cacheKey = `customFieldMapping:${entityType}`;
     return await getSessionCached(cacheKey, async () => {
-      const validEntityType = entityType as 'feature' | 'subfeature';
-      const config = await client.getEntityConfiguration(validEntityType);
+      const config = await client.getEntityConfiguration(entityType);
       const configData = Array.isArray(config.data) ? config.data[0] : config.data;
       if (configData?.fields === undefined || configData?.fields === null) {
         return { byId: new Map(), byName: new Map() };
@@ -563,7 +568,8 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
       'Supported for: feature, subfeature, objective. ' +
       'Filters: name (partial), statuses, owners, parent, archived, ids. ' +
       'Returns 100 items per page (API does not support custom page size). ' +
-      'NOTE: Team filtering is NOT supported - use client-side filtering after fetching.',
+      'NOTE: Team filtering is NOT supported - use client-side filtering after fetching. ' +
+      'Custom field filtering (customFieldFilters) is applied client-side after fetching.',
     {
       entityType: SearchableEntityTypeSchema.describe('Entity type to search (feature, subfeature, objective)'),
       name: z.string().optional().describe('Filter by name (partial, case-insensitive)'),
@@ -573,6 +579,11 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
       archived: z.boolean().optional().describe('Filter by archived state'),
       ids: z.array(z.string()).optional().describe('Filter by specific entity IDs'),
       pageCursor: z.string().optional().describe('Cursor for pagination'),
+      customFieldFilters: z.array(z.object({
+        field: z.string().describe('Custom field name'),
+        operator: z.enum(['=', '!=', '<', '<=', '>', '>=']).describe('Comparison operator'),
+        value: z.union([z.number(), z.string(), z.boolean()]).describe('Value to compare'),
+      })).optional().describe('Client-side filters for custom fields (e.g., Reach >= 50)'),
     },
     async (args) => {
       try {
@@ -582,6 +593,21 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
 
         // Get custom field mapping for transformation (feature/subfeature only)
         const customFieldMapping = await getCustomFieldMapping(client, entityType);
+
+        // Validate custom field filters if provided
+        const customFieldFilters = input.customFieldFilters as CustomFieldFilterInput[] | undefined;
+        if (customFieldFilters && customFieldFilters.length > 0 && customFieldMapping !== undefined) {
+          const validation = validateCustomFieldFilters(customFieldFilters, customFieldMapping);
+          if (!validation.valid) {
+            return toMcpError({
+              code: 'INVALID_CUSTOM_FIELD_FILTER',
+              message: validation.errors[0].message,
+              details: {
+                errors: validation.errors,
+              },
+            });
+          }
+        }
 
         // Build filters (all are direct properties under `data`, NOT in a filter wrapper)
         const filters: {
@@ -593,34 +619,114 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           ids?: string[];
         } = {};
 
-        if (input.name) filters.name = input.name;
-        if (input.statuses && input.statuses.length > 0) filters.statuses = input.statuses;
-        if (input.owners && input.owners.length > 0) filters.owners = input.owners;
-        if (input.parent) filters.parent = input.parent;
+        if (input.name !== undefined && input.name !== '') filters.name = input.name;
+        if (input.statuses !== undefined && input.statuses.length > 0) filters.statuses = input.statuses;
+        if (input.owners !== undefined && input.owners.length > 0) filters.owners = input.owners;
+        if (input.parent !== undefined) filters.parent = input.parent;
         if (input.archived !== undefined) filters.archived = input.archived;
-        if (input.ids && input.ids.length > 0) filters.ids = input.ids;
+        if (input.ids !== undefined && input.ids.length > 0) filters.ids = input.ids;
 
-        // Search entities (pageSize not supported by API - always returns 100)
-        const response = await client.searchEntities(entityType, filters, {
-          pageCursor: input.pageCursor,
+        // If custom field filters are provided, we need to fetch all pages
+        let allEntities: GenericEntity[] = [];
+        let pagesFetched = 0;
+        let nextCursor: string | null = null;
+        let hasMoreResults = false;
+
+        if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
+          // Fetch all pages for client-side filtering
+          let cursor: string | undefined = input.pageCursor;
+          do {
+            const response = await client.searchEntities(entityType, filters, {
+              pageCursor: cursor,
+            });
+            allEntities = allEntities.concat(response.data);
+            pagesFetched++;
+            cursor = extractCursor(response.links.next);
+          } while (cursor !== undefined && cursor !== null && cursor !== '' && pagesFetched < 50); // Safety limit
+          // When filtering, we've fetched all matching results
+          nextCursor = null;
+          hasMoreResults = false;
+        } else {
+          // Normal single-page fetch
+          const response = await client.searchEntities(entityType, filters, {
+            pageCursor: input.pageCursor,
+          });
+          allEntities = response.data;
+          pagesFetched = 1;
+          nextCursor = extractCursor(response.links.next) ?? null;
+          hasMoreResults = hasNextPage(response);
+        }
+
+        const totalBeforeFiltering = allEntities.length;
+
+        // Format entities with custom fields
+        const formattedEntities = allEntities.map((e) => {
+          const formatted: Record<string, unknown> = {
+            id: e.id,
+            type: e.type,
+            name: e.fields.name ?? 'Unnamed',
+            status: e.fields.status?.name ?? 'No status',
+            owner: e.fields.owner?.name ?? e.fields.owner?.email ?? 'Unassigned',
+            archived: e.fields.archived ?? false,
+          };
+
+          // Add custom fields if mapping is provided
+          if (customFieldMapping !== undefined && customFieldMapping.byId.size > 0) {
+            const customFields = transformCustomFields(e.fields, customFieldMapping);
+            if (Object.keys(customFields).length > 0) {
+              formatted.customFields = customFields;
+            }
+          }
+
+          return formatted;
         });
 
-        const result = formatEntityList(response.data, entityType, {
-          nextCursor: extractCursor(response.links.next),
-          hasMore: hasNextPage(response),
-        }, customFieldMapping);
+        // Apply custom field filters
+        let filteredEntities = formattedEntities;
+        if (customFieldFilters !== undefined && customFieldFilters.length > 0 && customFieldMapping !== undefined) {
+          // Type assertion needed because formattedEntities has Record<string, unknown> for customFields
+          // but applyCustomFieldFilters expects Record<string, CustomFieldValue>
+          filteredEntities = applyCustomFieldFilters(
+            formattedEntities,
+            customFieldFilters,
+            customFieldMapping
+          );
+        }
+
+        const totalAfterFiltering = filteredEntities.length;
+
+        // Build result
+        const result: Record<string, unknown> = {
+          entityType,
+          entities: filteredEntities,
+          totalReturned: filteredEntities.length,
+          nextCursor,
+          hasMoreResults,
+        };
 
         // Add applied filters info
         const appliedFilters: Record<string, unknown> = {};
-        if (input.name) appliedFilters.name = input.name;
-        if (input.statuses) appliedFilters.statuses = input.statuses;
-        if (input.owners) appliedFilters.owners = input.owners;
-        if (input.parent) appliedFilters.parent = input.parent;
+        if (input.name !== undefined && input.name !== '') appliedFilters.name = input.name;
+        if (input.statuses !== undefined) appliedFilters.statuses = input.statuses;
+        if (input.owners !== undefined) appliedFilters.owners = input.owners;
+        if (input.parent !== undefined) appliedFilters.parent = input.parent;
         if (input.archived !== undefined) appliedFilters.archived = input.archived;
-        if (input.ids) appliedFilters.ids = input.ids;
+        if (input.ids !== undefined) appliedFilters.ids = input.ids;
+        if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
+          appliedFilters.customFieldFilters = customFieldFilters;
+        }
 
         if (Object.keys(appliedFilters).length > 0) {
           result.appliedFilters = appliedFilters;
+        }
+
+        // Add filtering info if custom field filters were applied
+        if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
+          result.filteringInfo = {
+            totalBeforeFiltering,
+            totalAfterFiltering,
+            pagesFetched,
+          };
         }
 
         return toMcpSuccess(result);

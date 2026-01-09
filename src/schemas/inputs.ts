@@ -220,6 +220,22 @@ export const EntityListInputSchema = z.object({
 });
 
 /**
+ * Custom field filter operator schema.
+ * Numeric operators (<, <=, >, >=) only valid for number fields.
+ */
+export const CustomFieldFilterOperatorSchema = z.enum(['=', '!=', '<', '<=', '>', '>=']);
+
+/**
+ * Custom field filter schema for client-side filtering.
+ * Allows filtering by custom field values using various operators.
+ */
+export const CustomFieldFilterSchema = z.object({
+  field: z.string().min(1).describe('Custom field name (not UUID, case-insensitive match)'),
+  operator: CustomFieldFilterOperatorSchema.describe('Comparison operator'),
+  value: z.union([z.number(), z.string(), z.boolean()]).describe('Value to compare against'),
+});
+
+/**
  * pb_entity_search input schema
  *
  * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
@@ -228,6 +244,9 @@ export const EntityListInputSchema = z.object({
  * IMPORTANT: All filters are direct properties under `data`, NOT in a `filter` wrapper.
  * The official ProductBoard docs show a `filter` property but that does NOT work.
  * See CLAUDE.md and research.md for verified examples.
+ *
+ * Custom field filtering (customFieldFilters) is applied client-side after fetching
+ * from the API, since ProductBoard doesn't support server-side custom field filtering.
  */
 export const EntitySearchInputSchema = z.object({
   entityType: SearchableEntityTypeSchema.describe('Entity type to search (feature, subfeature, objective)'),
@@ -244,6 +263,10 @@ export const EntitySearchInputSchema = z.object({
   archived: z.boolean().optional().describe('Filter by archived state'),
   ids: z.array(z.string()).optional().describe('Filter by specific entity IDs'),
   pageCursor: z.string().optional().describe('Cursor for pagination'),
+  customFieldFilters: z
+    .array(CustomFieldFilterSchema)
+    .optional()
+    .describe('Client-side filters for custom field values (e.g., Reach >= 50)'),
 });
 
 /**
@@ -279,3 +302,7 @@ export type EntityListInput = z.infer<typeof EntityListInputSchema>;
 export type EntitySearchInput = z.infer<typeof EntitySearchInputSchema>;
 export type EntityTypesInput = z.infer<typeof EntityTypesInputSchema>;
 export type RefreshConfigInput = z.infer<typeof RefreshConfigInputSchema>;
+
+// Custom field filter types
+export type CustomFieldFilterOperator = z.infer<typeof CustomFieldFilterOperatorSchema>;
+export type CustomFieldFilterInput = z.infer<typeof CustomFieldFilterSchema>;

@@ -306,3 +306,376 @@ export function hasCustomFields(
 
   return false;
 }
+
+// =============================================================================
+// Custom Field Filtering (US2)
+// =============================================================================
+
+/**
+ * Filter input as provided by the user
+ */
+export interface CustomFieldFilterInput {
+  field: string;
+  operator: '=' | '!=' | '<' | '<=' | '>' | '>=';
+  value: number | string | boolean;
+}
+
+/**
+ * Result of filter validation
+ */
+export interface FilterValidationResult {
+  valid: boolean;
+  errors: FilterValidationError[];
+}
+
+/**
+ * A single filter validation error
+ */
+export interface FilterValidationError {
+  field: string;
+  code: 'INVALID_FIELD' | 'INVALID_OPERATOR' | 'TYPE_MISMATCH';
+  message: string;
+  suggestion?: string;
+  availableFields?: string[];
+  validOperators?: string[];
+}
+
+/**
+ * Find the closest matching field name using Levenshtein distance.
+ * Returns the best match if similarity is close enough.
+ */
+function findClosestMatch(input: string, options: string[]): string | undefined {
+  const inputLower = input.toLowerCase();
+  let bestMatch: string | undefined;
+  let bestScore = Infinity;
+
+  for (const option of options) {
+    const optionLower = option.toLowerCase();
+    // Simple edit distance calculation
+    const distance = levenshteinDistance(inputLower, optionLower);
+    // Only suggest if reasonably close (within 3 edits for short strings, 5 for longer)
+    const threshold = Math.max(3, Math.floor(option.length / 2));
+    if (distance < bestScore && distance <= threshold) {
+      bestScore = distance;
+      bestMatch = option;
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ */
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Operators valid for numeric fields
+ */
+const NUMERIC_OPERATORS = new Set(['=', '!=', '<', '<=', '>', '>=']);
+
+/**
+ * Operators valid for select and text fields
+ */
+const SELECT_OPERATORS = new Set(['=', '!=']);
+
+/**
+ * Validate custom field filters against the configuration.
+ * Checks that field names exist and operators are valid for the field type.
+ *
+ * @param filters - Array of filter specifications
+ * @param mapping - Custom field mapping from configuration
+ * @returns Validation result with any errors
+ */
+export function validateCustomFieldFilters(
+  filters: CustomFieldFilterInput[],
+  mapping: CustomFieldMapping
+): FilterValidationResult {
+  const errors: FilterValidationError[] = [];
+  const availableFields = Array.from(mapping.byName.keys()).map(
+    (key) => mapping.byName.get(key)?.name ?? key
+  );
+
+  for (const filter of filters) {
+    // Look up field by name (case-insensitive)
+    const fieldConfig = mapping.byName.get(filter.field.toLowerCase());
+
+    if (fieldConfig === undefined) {
+      // Field not found - suggest closest match
+      const suggestion = findClosestMatch(filter.field, availableFields);
+      errors.push({
+        field: filter.field,
+        code: 'INVALID_FIELD',
+        message: `Custom field '${filter.field}' not found`,
+        suggestion: suggestion !== undefined ? `Did you mean '${suggestion}'?` : undefined,
+        availableFields: availableFields.slice(0, 10), // Show first 10
+      });
+      continue;
+    }
+
+    // Validate operator for field type
+    const isNumericField = fieldConfig.type === 'number';
+    const validOperators = isNumericField ? NUMERIC_OPERATORS : SELECT_OPERATORS;
+
+    if (!validOperators.has(filter.operator)) {
+      errors.push({
+        field: filter.field,
+        code: 'INVALID_OPERATOR',
+        message: `Operator '${filter.operator}' not valid for ${fieldConfig.type} field '${filter.field}'`,
+        suggestion: isNumericField
+          ? undefined
+          : `Use '=' or '!=' for ${fieldConfig.type} fields`,
+        validOperators: Array.from(validOperators),
+      });
+      continue;
+    }
+
+    // Validate value type for numeric fields
+    if (isNumericField && typeof filter.value !== 'number') {
+      errors.push({
+        field: filter.field,
+        code: 'TYPE_MISMATCH',
+        message: `Filter value must be a number for field '${filter.field}'`,
+        suggestion: `Got ${typeof filter.value} '${filter.value}', expected number`,
+      });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Entity with transformed custom fields (for filtering)
+ * Uses unknown for flexibility with various entity formats
+ */
+interface EntityWithCustomFields {
+  customFields?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Apply custom field filters to an array of entities.
+ * Entities must have already been transformed to include customFields.
+ *
+ * @param entities - Array of entities with customFields property
+ * @param filters - Array of filter specifications
+ * @param mapping - Custom field mapping for type information
+ * @returns Filtered array of entities
+ */
+export function applyCustomFieldFilters<T extends EntityWithCustomFields>(
+  entities: T[],
+  filters: CustomFieldFilterInput[],
+  mapping: CustomFieldMapping
+): T[] {
+  if (filters.length === 0) {
+    return entities;
+  }
+
+  return entities.filter((entity) => {
+    const customFields = entity.customFields;
+    if (customFields === undefined) {
+      // Entity has no custom fields - doesn't match any filter
+      return false;
+    }
+
+    // All filters must match (AND logic)
+    for (const filter of filters) {
+      const fieldConfig = mapping.byName.get(filter.field.toLowerCase());
+      if (fieldConfig === undefined) {
+        // Unknown field - skip (validation should have caught this)
+        continue;
+      }
+
+      // Find the field value (case-insensitive match)
+      let fieldValue: unknown = null;
+      for (const [key, value] of Object.entries(customFields)) {
+        if (key.toLowerCase() === filter.field.toLowerCase()) {
+          fieldValue = value;
+          break;
+        }
+      }
+
+      // Check if filter matches
+      if (!matchesFilter(fieldValue, filter, fieldConfig.type)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Check if a field value matches a filter condition.
+ *
+ * @param value - The custom field value (unknown to support various input types)
+ * @param filter - The filter specification
+ * @param fieldType - The field type for proper comparison
+ * @returns true if value matches the filter
+ */
+function matchesFilter(
+  value: unknown,
+  filter: CustomFieldFilterInput,
+  fieldType: CustomFieldType
+): boolean {
+  // Handle null/undefined values
+  if (value === null || value === undefined) {
+    // Only != null returns true
+    return filter.operator === '!=' && filter.value !== null;
+  }
+
+  switch (fieldType) {
+    case 'number':
+      return matchesNumericFilter(value as number, filter.operator, filter.value as number);
+
+    case 'single_select':
+      return matchesSelectFilter(value as { name: string }, filter.operator, filter.value as string);
+
+    case 'multi_select':
+      return matchesMultiSelectFilter(
+        value as Array<{ name: string }>,
+        filter.operator,
+        filter.value as string
+      );
+
+    case 'text':
+    case 'richtext':
+      return matchesTextFilter(value as string, filter.operator, filter.value as string);
+
+    case 'boolean':
+      return matchesBooleanFilter(value as boolean, filter.operator, filter.value as boolean);
+
+    case 'member':
+      return matchesMemberFilter(
+        value as { email?: string; name?: string },
+        filter.operator,
+        filter.value as string
+      );
+
+    default:
+      // Unknown field type - treat as string equality
+      return String(value) === String(filter.value);
+  }
+}
+
+/**
+ * Match numeric field value against filter
+ */
+function matchesNumericFilter(
+  value: number,
+  operator: string,
+  filterValue: number
+): boolean {
+  switch (operator) {
+    case '=':
+      return value === filterValue;
+    case '!=':
+      return value !== filterValue;
+    case '<':
+      return value < filterValue;
+    case '<=':
+      return value <= filterValue;
+    case '>':
+      return value > filterValue;
+    case '>=':
+      return value >= filterValue;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Match single select field value against filter
+ */
+function matchesSelectFilter(
+  value: { name: string },
+  operator: string,
+  filterValue: string
+): boolean {
+  const matches = value.name.toLowerCase() === filterValue.toLowerCase();
+  return operator === '=' ? matches : !matches;
+}
+
+/**
+ * Match multi select field value against filter.
+ * For '=', matches if ANY option matches the filter value.
+ * For '!=', matches if NO option matches the filter value.
+ */
+function matchesMultiSelectFilter(
+  values: Array<{ name: string }>,
+  operator: string,
+  filterValue: string
+): boolean {
+  const hasMatch = values.some(
+    (v) => v.name.toLowerCase() === filterValue.toLowerCase()
+  );
+  return operator === '=' ? hasMatch : !hasMatch;
+}
+
+/**
+ * Match text field value against filter (case-insensitive)
+ */
+function matchesTextFilter(
+  value: string,
+  operator: string,
+  filterValue: string
+): boolean {
+  const matches = value.toLowerCase() === filterValue.toLowerCase();
+  return operator === '=' ? matches : !matches;
+}
+
+/**
+ * Match boolean field value against filter
+ */
+function matchesBooleanFilter(
+  value: boolean,
+  operator: string,
+  filterValue: boolean
+): boolean {
+  const matches = value === filterValue;
+  return operator === '=' ? matches : !matches;
+}
+
+/**
+ * Match member field value against filter.
+ * Matches against email or name (case-insensitive).
+ */
+function matchesMemberFilter(
+  value: { email?: string; name?: string },
+  operator: string,
+  filterValue: string
+): boolean {
+  const filterLower = filterValue.toLowerCase();
+  const emailMatch = value.email?.toLowerCase() === filterLower;
+  const nameMatch = value.name?.toLowerCase() === filterLower;
+  const matches = emailMatch || nameMatch;
+  return operator === '=' ? matches : !matches;
+}
