@@ -42,17 +42,23 @@ export function validateFieldsAgainstConfig(
     return { valid: true, warnings: [] };
   }
 
-  // Build a map of field configs for quick lookup
+  // Build a map of field configs for quick lookup (case-insensitive)
   const configMap = new Map<string, RawFieldConfig>();
   for (const field of config) {
-    configMap.set(field.name, field);
+    configMap.set(field.name.toLowerCase(), field);
+  }
+
+  // Build a map of provided fields (case-insensitive) for required field checks
+  const providedFieldsLower = new Map<string, unknown>();
+  for (const [key, value] of Object.entries(fields)) {
+    providedFieldsLower.set(key.toLowerCase(), value);
   }
 
   // Check for missing required fields (only on create)
   if (operation === 'create') {
     for (const fieldConfig of config) {
       if (fieldConfig.required && !fieldConfig.readOnly) {
-        const providedValue = fields[fieldConfig.name];
+        const providedValue = providedFieldsLower.get(fieldConfig.name.toLowerCase());
         if (providedValue === undefined || providedValue === null || providedValue === '') {
           warnings.push({
             field: fieldConfig.name,
@@ -67,7 +73,7 @@ export function validateFieldsAgainstConfig(
 
   // Validate provided field values
   for (const [fieldName, fieldValue] of Object.entries(fields)) {
-    const fieldConfig = configMap.get(fieldName);
+    const fieldConfig = configMap.get(fieldName.toLowerCase());
 
     // Skip validation for unknown fields (silent skip per FR-008)
     if (!fieldConfig) {
