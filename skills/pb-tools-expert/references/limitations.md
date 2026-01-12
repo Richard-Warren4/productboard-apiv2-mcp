@@ -272,6 +272,58 @@ See Pattern 6 in `workflow-patterns.md` for the complete flow.
 
 ---
 
+## Custom Field Select Options Not in Config
+
+### Limitation
+
+The configuration endpoint does NOT return available option values for single-select and multi-select custom fields. You won't see what values are valid until you look at existing entities or the ProductBoard UI.
+
+### Observed Behavior
+
+```
+pb_get_config({entityType: "feature"})
+→ { "Platform Area": { type: "multi_select", options: [] } }
+```
+
+### Good News: Option Names Work
+
+Despite the config not listing options, the API accepts option **names** directly - you don't need IDs:
+
+```
+pb_entity_update({
+  id: "feature-to-update",
+  fields: {
+    "Platform Area": [{"name": "Desktop"}, {"name": "Mobile"}]
+  }
+})
+```
+
+### Discovering Valid Option Names
+
+If you don't know the valid option names, find them from:
+1. **ProductBoard UI** - Look at the field in any feature
+2. **Existing entities** - Search features that have the field set
+
+```
+pb_entity_search({entityType: "feature", name: "anything"})
+→ {
+    "customFields": {
+      "Platform Area": [
+        {"id": "uuid-1", "name": "Desktop"},
+        {"id": "uuid-2", "name": "Mobile"}
+      ]
+    }
+  }
+```
+
+### Why This Matters
+
+- Config doesn't tell you what values are valid
+- But option names work for updates (not just IDs)
+- See Pattern 8 in `workflow-patterns.md` for complete workflow
+
+---
+
 ## Quick Reference: Limitations Summary
 
 | Area | Limitation | Workaround |
@@ -285,3 +337,4 @@ See Pattern 6 in `workflow-patterns.md` for the complete flow.
 | Initiative type | Not supported | Use objective type |
 | pb_list_products | Returns IDs only, no names | Use pb_entity_get on each |
 | Feature parent | May be required | Check workspace config |
+| Custom field options | Config doesn't list valid options | Use option names directly, or discover from existing entities |

@@ -36,6 +36,7 @@ import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/va
 import {
   buildCustomFieldMapping,
   transformCustomFields,
+  transformFieldsForUpdate,
   validateCustomFieldFilters,
   applyCustomFieldFilters,
   type CustomFieldFilterInput,
@@ -93,13 +94,13 @@ function formatEntity(entity: GenericEntity, customFieldMapping?: CustomFieldMap
       : fields.description;
   }
   if (fields.status) {
-    formatted.status = fields.status.name ?? 'No status';
+    formatted.status = fields.status?.name ?? 'No status';
   }
   if (fields.owner) {
-    formatted.owner = fields.owner.name ?? fields.owner.email ?? 'Unassigned';
+    formatted.owner = fields.owner?.name ?? fields.owner?.email ?? 'Unassigned';
   }
   if (fields.teams && fields.teams.length > 0) {
-    formatted.teams = fields.teams.map((t) => t.name).join(', ');
+    formatted.teams = fields.teams.filter((t) => t).map((t) => t.name).join(', ');
   }
   if (fields.archived !== undefined) {
     formatted.archived = fields.archived;
@@ -492,13 +493,36 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           validationWarnings.push(...validation.warnings);
         }
 
-        // Update entity
-        const response = await client.updateEntity(input.id, processedFields);
+        // Transform custom field names to UUIDs for API (feature/subfeature only)
+        let fieldsToUpdate = processedFields;
+        if (entityType === 'feature' || entityType === 'subfeature') {
+          const customFieldMapping = await getCustomFieldMapping(client, entityType);
+          if (customFieldMapping && customFieldMapping.byName.size > 0) {
+            const { transformedFields, warnings: transformWarnings } = transformFieldsForUpdate(
+              processedFields,
+              customFieldMapping
+            );
+            fieldsToUpdate = transformedFields;
+            // Add transformation warnings to validation warnings
+            for (const warning of transformWarnings) {
+              validationWarnings.push({ field: 'custom', issue: 'invalid_value', message: warning });
+            }
+          }
+        }
 
+        // Update entity
+        const response = await client.updateEntity(input.id, fieldsToUpdate);
+
+        // Note: API update response only includes { id, type, links } - no fields
+        // Return minimal entity info from the response
         const result: Record<string, unknown> = {
           message: `${entityType} updated successfully`,
           updatedFields,
-          entity: formatEntity(response.data),
+          entity: {
+            id: response.data.id,
+            type: response.data.type,
+            productboardUrl: getProductBoardUrl(response.data),
+          },
         };
 
         if (validationWarnings.length > 0) {
@@ -769,7 +793,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
               type: f.type,
               required: f.required,
               readOnly: f.readOnly,
-              options: f.options?.map((o: { name: string }) => o.name),
+              options: f.options?.filter((o) => o).map((o: { name: string }) => o.name),
             }));
           }
 

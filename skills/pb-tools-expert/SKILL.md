@@ -29,6 +29,7 @@ This skill provides expert guidance for using ProductBoard MCP tools effectively
 | List all of a type | `pb_entity_list` | `entityType` |
 | Create entity | `pb_entity_create` | `entityType`, `fields` |
 | Update entity | `pb_entity_update` | `id`, `fields` |
+| Update custom fields | `pb_entity_update` | `id`, `fields: {"Field Name": value}` |
 | Link feature to objective | `pb_create_relationship` | `entityId`, `relationshipType: "link"`, `targetId` |
 | View relationships | `pb_get_relationships` | `featureId` |
 | Discover config | `pb_get_config` | `entityType` |
@@ -170,6 +171,7 @@ Some operations have known limitations. Key ones:
 | `initiative` type not supported | Use `objective` instead |
 | `pb_list_products` returns IDs only | Use `pb_entity_get` on each ID to get names |
 | Features may require parent | Check with `pb_list_products` first |
+| Custom field options not in config | Use option names directly: `{"name": "Desktop"}` |
 
 For full details, see `references/limitations.md`.
 

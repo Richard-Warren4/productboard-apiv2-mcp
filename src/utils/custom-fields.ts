@@ -679,3 +679,205 @@ function matchesMemberFilter(
   const matches = emailMatch || nameMatch;
   return operator === '=' ? matches : !matches;
 }
+
+// =============================================================================
+// Custom Field Update Transformation (for pb_entity_update)
+// =============================================================================
+
+/**
+ * Result of transforming fields for update
+ */
+export interface FieldTransformResult {
+  transformedFields: Record<string, unknown>;
+  warnings: string[];
+}
+
+/**
+ * Transform field names to UUIDs for API update requests.
+ *
+ * The ProductBoard API requires field UUIDs (not display names) when updating
+ * custom fields. This function transforms human-readable field names to their
+ * corresponding UUIDs.
+ *
+ * For select fields, it also transforms option names to option IDs.
+ *
+ * @param fields - Fields object from update request (may contain custom field names)
+ * @param mapping - Custom field mapping from configuration
+ * @returns Transformed fields with UUIDs and any warnings
+ */
+export function transformFieldsForUpdate(
+  fields: Record<string, unknown>,
+  mapping: CustomFieldMapping
+): FieldTransformResult {
+  const transformedFields: Record<string, unknown> = {};
+  const warnings: string[] = [];
+
+  for (const [key, value] of Object.entries(fields)) {
+    // Check if this is a standard field (pass through unchanged)
+    if (STANDARD_FIELDS.has(key.toLowerCase())) {
+      transformedFields[key] = value;
+      continue;
+    }
+
+    // Check if this is already a UUID (pass through unchanged)
+    if (isUUID(key)) {
+      transformedFields[key] = value;
+      continue;
+    }
+
+    // Look up field by name (case-insensitive)
+    const fieldConfig = mapping.byName.get(key.toLowerCase());
+
+    if (!fieldConfig) {
+      // Unknown field - pass through and warn
+      transformedFields[key] = value;
+      warnings.push(`Unknown custom field '${key}' - passing through unchanged`);
+      continue;
+    }
+
+    // Transform the value based on field type
+    const transformedValue = transformValueForUpdate(value, fieldConfig);
+    transformedFields[fieldConfig.id] = transformedValue;
+  }
+
+  return { transformedFields, warnings };
+}
+
+/**
+ * Transform a field value for update based on field type.
+ *
+ * For select fields, transforms option names to option IDs.
+ * For other fields, passes through unchanged.
+ *
+ * @param value - The value to transform
+ * @param fieldConfig - The field configuration
+ * @returns Transformed value suitable for API
+ */
+function transformValueForUpdate(
+  value: unknown,
+  fieldConfig: CustomFieldConfig
+): unknown {
+  // Handle null/undefined
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  switch (fieldConfig.type) {
+    case 'single_select':
+      return transformSingleSelectValue(value, fieldConfig);
+
+    case 'multi_select':
+      return transformMultiSelectValue(value, fieldConfig);
+
+    case 'member':
+      // Member fields accept { id } or { email }
+      return value;
+
+    default:
+      // Other field types pass through unchanged
+      return value;
+  }
+}
+
+/**
+ * Transform single select value for update.
+ * Accepts: string (option name), { name: string }, or { id: string }
+ * Returns: { id: string } or original if can't transform
+ */
+function transformSingleSelectValue(
+  value: unknown,
+  fieldConfig: CustomFieldConfig
+): unknown {
+  if (!fieldConfig.options || fieldConfig.options.length === 0) {
+    return value;
+  }
+
+  // If it's a string, treat as option name
+  if (typeof value === 'string') {
+    const option = fieldConfig.options.find(
+      (o) => o.name.toLowerCase() === value.toLowerCase()
+    );
+    if (option) {
+      return { id: option.id };
+    }
+    return value; // Pass through if not found
+  }
+
+  // If it's an object with name but no id, look up the id
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+
+    // Already has id - pass through
+    if (obj.id && typeof obj.id === 'string') {
+      return { id: obj.id };
+    }
+
+    // Has name - look up id
+    if (obj.name && typeof obj.name === 'string') {
+      const option = fieldConfig.options.find(
+        (o) => o.name.toLowerCase() === (obj.name as string).toLowerCase()
+      );
+      if (option) {
+        return { id: option.id };
+      }
+    }
+  }
+
+  return value;
+}
+
+/**
+ * Transform multi select value for update.
+ * Accepts: string[] (option names), { name: string }[], or { id: string }[]
+ * Returns: { id: string }[] or original if can't transform
+ */
+function transformMultiSelectValue(
+  value: unknown,
+  fieldConfig: CustomFieldConfig
+): unknown {
+  if (!fieldConfig.options || fieldConfig.options.length === 0) {
+    return value;
+  }
+
+  if (!Array.isArray(value)) {
+    // Single value - wrap in array and transform
+    const transformed = transformSingleSelectValue(value, fieldConfig);
+    return [transformed];
+  }
+
+  // Transform each item in the array
+  return value.map((item) => {
+    // If it's a string, treat as option name
+    if (typeof item === 'string') {
+      const option = fieldConfig.options!.find(
+        (o) => o.name.toLowerCase() === item.toLowerCase()
+      );
+      if (option) {
+        return { id: option.id };
+      }
+      return item; // Pass through if not found
+    }
+
+    // If it's an object with name but no id, look up the id
+    if (typeof item === 'object' && item !== null) {
+      const obj = item as Record<string, unknown>;
+
+      // Already has id - pass through
+      if (obj.id && typeof obj.id === 'string') {
+        return { id: obj.id };
+      }
+
+      // Has name - look up id
+      if (obj.name && typeof obj.name === 'string') {
+        const option = fieldConfig.options!.find(
+          (o) => o.name.toLowerCase() === (obj.name as string).toLowerCase()
+        );
+        if (option) {
+          return { id: option.id };
+        }
+      }
+    }
+
+    return item;
+  });
+}

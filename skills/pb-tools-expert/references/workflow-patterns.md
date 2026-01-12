@@ -515,6 +515,103 @@ pb_get_relationships({featureId: "feat-new-parent"})
 
 ---
 
+## Pattern 8: Update Custom Fields (e.g., Platform Area)
+
+### When to Use
+
+When updating custom field values on features or subfeatures (e.g., DRICE scores, Platform Area, Driver, etc.).
+
+### Key Discovery
+
+**Option names work!** The API accepts `{"name": "Desktop"}` format - you don't need to look up option IDs first. This is documented in the [ProductBoard API Field Value Types](https://developer.productboard.com/v2.0.0/reference/field-value-types).
+
+### Steps (Simple Method)
+
+1. **Know Option Names** - Use option names you see in the ProductBoard UI
+2. **Update Feature** - Use pb_entity_update with field name and option names
+
+### Complete Example (Recommended)
+
+```
+Simple update with option names:
+─────────────────────────────────────────────────
+pb_entity_update({
+  id: "feat-123",
+  fields: {
+    "Platform Area": [
+      {"name": "Desktop"},
+      {"name": "Mobile"}
+    ]
+  }
+})
+
+Response:
+{
+  "message": "feature updated successfully",
+  "updatedFields": ["Platform Area"],
+  "entity": {
+    "id": "feat-123",
+    "type": "feature",
+    "productboardUrl": "https://app.productboard.com/..."
+  }
+}
+```
+
+### Alternative: Using Option IDs
+
+If you prefer IDs (they're stable even if names change), discover them from existing entities:
+
+```
+Step 1: Find option IDs from existing features
+─────────────────────────────────────────────────
+pb_entity_search({
+  entityType: "feature",
+  name: "Send"
+})
+
+Response (showing Platform Area values):
+{
+  "customFields": {
+    "Platform Area": [
+      {"id": "46691e69-...", "name": "Desktop", "color": "pink"},
+      {"id": "05c8c7ac-...", "name": "Mobile", "color": "purple"}
+    ]
+  }
+}
+
+Step 2: Update using IDs
+─────────────────────────────────────────────────
+pb_entity_update({
+  id: "feat-123",
+  fields: {
+    "Platform Area": [
+      {"id": "46691e69-..."},
+      {"id": "05c8c7ac-..."}
+    ]
+  }
+})
+```
+
+### Supported Custom Field Types
+
+| Field Type | Value Format (by name) | Value Format (by ID) |
+|------------|------------------------|----------------------|
+| Number | `{"Reach": 85}` | N/A |
+| Text | `{"Notes": "text value"}` | N/A |
+| Single Select | `{"Driver": {"name": "Revenue"}}` | `{"Driver": {"id": "uuid"}}` |
+| Multi Select | `{"Platform Area": [{"name": "Desktop"}]}` | `{"Platform Area": [{"id": "uuid"}]}` |
+| Member | `{"Designer": {"email": "user@example.com"}}` | `{"Designer": {"id": "uuid"}}` |
+
+### Key Points
+
+- **Option names work** - Use `{"name": "Desktop"}` format for select fields
+- Custom field names are case-insensitive ("Platform Area" = "platform area")
+- The MCP automatically transforms field names to UUIDs for the API
+- IDs are more stable if option names might change
+- To clear a field, set it to `null`
+
+---
+
 ## Workflow Decision Tree
 
 ```
