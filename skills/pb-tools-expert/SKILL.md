@@ -1,6 +1,6 @@
 ---
 name: pb-tools-expert
-description: This skill should be used when the user asks to "find features in ProductBoard", "create a ProductBoard feature", "search ProductBoard", "link feature to objective", "get ProductBoard relationships", or mentions ProductBoard entities, features, objectives, subfeatures, or MCP tools like pb_entity_search or pb_get_relationships.
+description: This skill should be used when the user asks to "find features in ProductBoard", "create a feature", "search ProductBoard", "link feature to objective", "get ProductBoard relationships", or mentions ProductBoard entities, features, objectives, subfeatures, or MCP tools like pb_entity_search or pb_get_relationships.
 ---
 
 ## Overview
