@@ -1,0 +1,19 @@
+{
+  "name": "pb-mcp-skills",
+  "version": "1.0.0",
+  "description": "Expert skills for using ProductBoard MCP tools effectively - guides AI assistants in tool selection, avoiding common mistakes, and following workflow patterns",
+  "author": {
+    "name": "ProductBoard MCP Contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "productboard",
+    "mcp",
+    "skills",
+    "ai",
+    "tools",
+    "model-context-protocol"
+  ],
+  "repository": "https://github.com/your-org/productboard-apiv2-mcp",
+  "homepage": "https://github.com/your-org/productboard-apiv2-mcp"
+}
