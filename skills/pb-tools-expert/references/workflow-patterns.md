@@ -381,6 +381,74 @@ pb_create_relationship({
 
 ---
 
+## Pattern 6: Move Feature Between Parents (Reliable Method)
+
+### When to Use
+
+When moving a feature or subfeature from one parent to another.
+
+### Important Note
+
+**Do NOT use `pb_set_relationship`** for moving features. While it may appear to work, results can be inconsistent. Use `pb_entity_update` instead.
+
+### Steps
+
+1. **Identify Target** - Find the new parent ID
+2. **Update Parent** - Use pb_entity_update to set new parent
+
+### Complete Example
+
+```
+Step 1: Find the new parent feature
+─────────────────────────────────────────────────
+pb_entity_search({
+  entityType: "feature",
+  name: "Payment System"
+})
+
+Response:
+{
+  "data": [
+    {"id": "feat-new-parent", "name": "Payment System v2"}
+  ]
+}
+
+Step 2: Move the subfeature to new parent
+─────────────────────────────────────────────────
+pb_entity_update({
+  id: "sub-to-move",
+  fields: {
+    parent: {id: "feat-new-parent"}
+  }
+})
+
+Response:
+{
+  "id": "sub-to-move",
+  "parent": {"id": "feat-new-parent"}
+}
+```
+
+### Why This Works Better
+
+- `pb_entity_update` with `parent` field is the authoritative way to change hierarchy
+- `pb_set_relationship` is designed for relationships, not hierarchy changes
+- Update operation guarantees the change is persisted
+
+### Verification
+
+After moving, verify the change:
+
+```
+pb_entity_get({id: "sub-to-move"})
+→ Confirm parent.id matches new parent
+
+pb_get_relationships({featureId: "feat-new-parent"})
+→ Confirm children includes the moved feature
+```
+
+---
+
 ## Workflow Decision Tree
 
 ```
@@ -398,6 +466,9 @@ What do you need to do?
 │
 ├─ Update something?
 │  └─ Any entity → pb_entity_update
+│
+├─ Move to different parent?
+│  └─ pb_entity_update with parent: {id: "..."}
 │
 ├─ Connect things?
 │  ├─ Feature to objective → pb_create_relationship (type: link)

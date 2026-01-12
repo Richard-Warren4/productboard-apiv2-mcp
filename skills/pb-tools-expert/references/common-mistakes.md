@@ -253,6 +253,176 @@ pb_entity_search({
 
 ---
 
+## Mistake 6: Forgetting archived: false Filter
+
+### The Problem
+
+By default, `pb_entity_search` returns BOTH active and archived features. Archived features clutter results.
+
+### Wrong
+
+```json
+{
+  "entityType": "feature",
+  "statuses": [{"name": "In progress"}]
+}
+```
+
+This may return archived features that match the status.
+
+### Right
+
+```json
+{
+  "entityType": "feature",
+  "statuses": [{"name": "In progress"}],
+  "archived": false
+}
+```
+
+### Why This Matters
+
+- Archived features still exist in the system
+- Search returns all matching features regardless of archive status
+- Users typically want only active features
+
+### Best Practice
+
+Always include `archived: false` unless specifically looking for archived items:
+
+```json
+{
+  "entityType": "feature",
+  "name": "checkout",
+  "archived": false
+}
+```
+
+---
+
+## Mistake 7: Wrong Owner Field Format
+
+### The Problem
+
+The owner field accepts two formats, and using the wrong one for the context causes errors.
+
+### For Creating/Updating Features
+
+Use **email** format:
+
+```json
+{
+  "entityType": "feature",
+  "fields": {
+    "name": "New Feature",
+    "owner": {"email": "developer@example.com"}
+  }
+}
+```
+
+### For Searching Features
+
+Both formats work, but **email** is more reliable:
+
+```json
+{
+  "entityType": "feature",
+  "owners": [{"email": "developer@example.com"}]
+}
+```
+
+Or with ID:
+
+```json
+{
+  "entityType": "feature",
+  "owners": [{"id": "user-uuid"}]
+}
+```
+
+### Common Pitfall
+
+Don't mix formats in the same request:
+
+```json
+// Wrong - mixing email and id
+{
+  "owners": [
+    {"email": "user1@example.com"},
+    {"id": "user-uuid"}
+  ]
+}
+```
+
+### Best Practice
+
+1. For create/update: Always use `{email: "..."}` format
+2. For search: Prefer `{email: "..."}` for consistency
+3. Use `{id: "..."}` only when you already have the user UUID
+
+---
+
+## Mistake 8: Description Without HTML Tags
+
+### The Problem
+
+ProductBoard requires descriptions in HTML format. Plain text without tags is rejected.
+
+### Wrong (Pre-MCP Fix)
+
+```json
+{
+  "fields": {
+    "description": "This is my feature description"
+  }
+}
+```
+
+### Right
+
+```json
+{
+  "fields": {
+    "description": {"value": "<p>This is my feature description</p>"}
+  }
+}
+```
+
+### Current MCP Behavior
+
+**The MCP now auto-wraps plain text descriptions** in `<p>` tags. Both formats work:
+
+```json
+// Plain text - MCP wraps in <p> tags automatically
+{
+  "fields": {
+    "description": "Plain text description"
+  }
+}
+
+// HTML - Used as-is
+{
+  "fields": {
+    "description": {"value": "<p>Already formatted</p>"}
+  }
+}
+```
+
+### Supported HTML Tags
+
+ProductBoard allows limited HTML:
+- Headings: `<h1>`, `<h2>`
+- Paragraphs: `<p>`
+- Formatting: `<b>`, `<i>`, `<u>`, `<s>`, `<code>`
+- Lists: `<ul>`, `<ol>`, `<li>`
+- Other: `<hr>`, `<pre>`, `<blockquote>`, `<a>`
+
+### Unsupported Tags
+
+Avoid: `<div>`, `<span>`, `<table>`, `<img>`, `<script>`, etc.
+
+---
+
 ## Quick Reference: Mistake Prevention Checklist
 
 Before making API calls:
@@ -263,3 +433,6 @@ Before making API calls:
 - [ ] Using `pb_entity_search` for filtered queries (not `pb_entity_list`)
 - [ ] Not relying on `pageSize` parameter
 - [ ] Using `pageCursor` for multi-page results
+- [ ] Including `archived: false` unless searching for archived items
+- [ ] Using `{email: "..."}` format for owner fields
+- [ ] Description has HTML tags (or rely on MCP auto-wrapping)

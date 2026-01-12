@@ -67,6 +67,18 @@ Use `pb_entity_search` with filters instead of `pb_entity_list` followed by clie
 
 The `pageSize` parameter is NOT supported. API returns 100 items per page. Use `pageCursor` for pagination.
 
+### 6. Forgetting archived: false
+
+Search returns both active and archived features by default. Add `archived: false` to filter:
+
+```
+{entityType: "feature", statuses: [{name: "In progress"}], archived: false}
+```
+
+### 7. Wrong Owner Field Format
+
+Use `{email: "..."}` for create/update operations. Both `{email}` and `{id}` work for search.
+
 For detailed explanations, see `references/common-mistakes.md`.
 
 ## Core Workflow Patterns
@@ -112,6 +124,8 @@ For detailed workflow examples, see `references/workflow-patterns.md`.
 - Use "initiative" entity type
 - Expect `pageSize` parameter to work
 - Use `pb_entity_list` when filters are needed
+- Forget `archived: false` when searching
+- Use `pb_set_relationship` to move features (use `pb_entity_update` with `parent` instead)
 
 ## Troubleshooting
 
@@ -121,6 +135,19 @@ For detailed workflow examples, see `references/workflow-patterns.md`.
 
 **Rate limiting:** Batch operations, use search filters, paginate properly.
 
+## API Limitations
+
+Some operations have known limitations. Key ones:
+
+| Limitation | Workaround |
+|------------|------------|
+| Team filtering not supported | Filter client-side after fetch |
+| Subfeature teams may not persist | Assign teams to parent feature |
+| Name search is partial/case-insensitive | Add other filters to narrow results |
+| `initiative` type not supported | Use `objective` instead |
+
+For full details, see `references/limitations.md`.
+
 ## Additional Resources
 
 ### Reference Files
@@ -129,3 +156,4 @@ For detailed information, consult:
 - **`references/tool-reference.md`** - Complete tool documentation with all parameters and examples
 - **`references/common-mistakes.md`** - Detailed mistake explanations and solutions
 - **`references/workflow-patterns.md`** - Full workflow examples with code
+- **`references/limitations.md`** - Known API limitations and workarounds
