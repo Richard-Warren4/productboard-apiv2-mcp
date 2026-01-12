@@ -408,18 +408,35 @@ ProductBoard requires descriptions in HTML format. Plain text without tags is re
 }
 ```
 
-### Supported HTML Tags
+### Supported HTML Tags (Official)
 
-ProductBoard allows limited HTML:
-- Headings: `<h1>`, `<h2>`
-- Paragraphs: `<p>`
-- Formatting: `<b>`, `<i>`, `<u>`, `<s>`, `<code>`
-- Lists: `<ul>`, `<ol>`, `<li>`
-- Other: `<hr>`, `<pre>`, `<blockquote>`, `<a>`
+ProductBoard API accepts these richtext tags only (from [official docs](https://developer.productboard.com/v2.0.0/reference/richtext)):
 
-### Unsupported Tags
+| Category | Tags |
+|----------|------|
+| Headings | `<h1>`, `<h2>` |
+| Text | `<p>`, `<b>`, `<i>`, `<u>`, `<s>`, `<code>` |
+| Lists | `<ul>`, `<ol>`, `<li>` |
+| Blocks | `<pre>`, `<blockquote>`, `<hr/>` |
+| Links | `<a href="...">` |
 
-Avoid: `<div>`, `<span>`, `<table>`, `<img>`, `<script>`, etc.
+### Validation Rules
+
+- **All tags must be closed** (self-closing `<hr/>` or paired `<p>...</p>`)
+- **Attributes must be quoted** (`<a href="url">` not `<a href=url>`)
+- **Entity APIs return 400 errors** for unsupported tags
+
+### Unsupported Tags (Cause 400 Errors)
+
+`<div>`, `<span>`, `<table>`, `<img>`, `<script>`, `<br>` (use `<p>` for line breaks)
+
+### Common Error Message
+
+Plain text without tags causes this cryptic error:
+```
+"Element 'body' cannot have character [children], because the type's content type is element-only."
+```
+**Solution**: Wrap your text in `<p>` tags: `<p>Your text here</p>`
 
 ---
 
@@ -429,10 +446,11 @@ Before making API calls:
 
 - [ ] Status names use exact casing from `pb_get_config`
 - [ ] Subfeatures include `parent: {id: "..."}` field
+- [ ] Features include `parent` if workspace requires it
 - [ ] Entity type is supported (not "initiative")
 - [ ] Using `pb_entity_search` for filtered queries (not `pb_entity_list`)
 - [ ] Not relying on `pageSize` parameter
 - [ ] Using `pageCursor` for multi-page results
 - [ ] Including `archived: false` unless searching for archived items
 - [ ] Using `{email: "..."}` format for owner fields
-- [ ] Description has HTML tags (or rely on MCP auto-wrapping)
+- [ ] Description has HTML tags wrapped in `<p>` or uses `{value: "<p>...</p>"}`

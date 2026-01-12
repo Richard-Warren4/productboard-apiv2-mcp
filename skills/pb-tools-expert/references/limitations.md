@@ -203,6 +203,75 @@ ProductBoard API v2 is in **beta**. Response formats, field availability, and be
 
 ---
 
+## pb_list_products Returns Minimal Data
+
+### Limitation
+
+The `pb_list_products` tool returns only product IDs and descriptions (often empty). Product names are not included in the list response.
+
+### Observed Behavior
+
+```
+pb_list_products()
+→ {products: [{id: "uuid-1", description: ""}, {id: "uuid-2", description: ""}]}
+```
+
+### Workaround
+
+Fetch each product individually to get names:
+
+```
+pb_list_products()
+→ Get list of IDs
+
+pb_entity_get({id: "uuid-1"})
+→ {"name": "Mobile App", "owner": "alice@example.com"}
+
+pb_entity_get({id: "uuid-2"})
+→ {"name": "Desktop App", "owner": "bob@example.com"}
+```
+
+### Why This Matters
+
+- Cannot quickly identify products by name
+- Requires N+1 API calls to build a product list with names
+- Check `owner` field to find products you own
+
+---
+
+## Features May Require Parent Entity
+
+### Limitation
+
+Many ProductBoard workspaces are configured to require features to have a parent (product or component). This is a workspace-level setting.
+
+### Error Message
+
+```
+"Entity of type features cannot be without a parent"
+```
+
+### Workaround
+
+Always include a parent when creating features:
+
+```
+pb_entity_create({
+  entityType: "feature",
+  fields: {
+    name: "New Feature",
+    parent: {id: "product-uuid"},  // Required in many workspaces
+    description: {value: "<p>Description</p>"}
+  }
+})
+```
+
+### Finding a Parent
+
+See Pattern 6 in `workflow-patterns.md` for the complete flow.
+
+---
+
 ## Quick Reference: Limitations Summary
 
 | Area | Limitation | Workaround |
@@ -214,3 +283,5 @@ ProductBoard API v2 is in **beta**. Response formats, field availability, and be
 | User entities | Read-only | Manage via UI/SSO |
 | Page size | Fixed at 100 | Use pageCursor for pagination |
 | Initiative type | Not supported | Use objective type |
+| pb_list_products | Returns IDs only, no names | Use pb_entity_get on each |
+| Feature parent | May be required | Check workspace config |

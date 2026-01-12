@@ -1,5 +1,5 @@
 ---
-name: ProductBoard MCP Tools Expert
+name: pb-tools-expert
 description: This skill should be used when the user asks to "find features in ProductBoard", "create a ProductBoard feature", "search ProductBoard", "link feature to objective", "get ProductBoard relationships", or mentions ProductBoard entities, features, objectives, subfeatures, or MCP tools like pb_entity_search or pb_get_relationships.
 ---
 
@@ -79,6 +79,27 @@ Search returns both active and archived features by default. Add `archived: fals
 
 Use `{email: "..."}` for create/update operations. Both `{email}` and `{id}` work for search.
 
+### 8. Description Without HTML Tags
+
+**CRITICAL**: Descriptions MUST be HTML-wrapped. Plain text fails with cryptic error.
+
+```
+Wrong: {description: "Plain text"}
+Wrong: {description: {value: "Plain text"}}
+Right: {description: {value: "<p>Your description here</p>"}}
+```
+
+### 9. Creating Features Without Parent
+
+Many ProductBoard workspaces require features to have a parent (product or component).
+
+```
+Wrong: {entityType: "feature", fields: {name: "Feature"}}
+Right: {entityType: "feature", fields: {name: "Feature", parent: {id: "product-uuid"}}}
+```
+
+**To find a parent**: Use `pb_list_products` → `pb_entity_get` on each ID to find names.
+
 For detailed explanations, see `references/common-mistakes.md`.
 
 ## Core Workflow Patterns
@@ -121,11 +142,13 @@ For detailed workflow examples, see `references/workflow-patterns.md`.
 
 - Assume status name casing
 - Create subfeatures without parent references
+- Create features without checking if parent is required
+- Use plain text descriptions (must be HTML: `<p>text</p>`)
 - Use "initiative" entity type
 - Expect `pageSize` parameter to work
 - Use `pb_entity_list` when filters are needed
 - Forget `archived: false` when searching
-- Use `pb_set_relationship` to move features (use `pb_entity_update` with `parent` instead)
+- Use `pb_set_relationship` to move features (use `pb_entity_update` with `parent`)
 
 ## Troubleshooting
 
@@ -145,6 +168,8 @@ Some operations have known limitations. Key ones:
 | Subfeature teams may not persist | Assign teams to parent feature |
 | Name search is partial/case-insensitive | Add other filters to narrow results |
 | `initiative` type not supported | Use `objective` instead |
+| `pb_list_products` returns IDs only | Use `pb_entity_get` on each ID to get names |
+| Features may require parent | Check with `pb_list_products` first |
 
 For full details, see `references/limitations.md`.
 

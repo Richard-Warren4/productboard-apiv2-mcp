@@ -381,7 +381,73 @@ pb_create_relationship({
 
 ---
 
-## Pattern 6: Move Feature Between Parents (Reliable Method)
+## Pattern 6: Find Product for Feature Parent
+
+### When to Use
+
+When creating features and you need to find the correct parent product/component.
+
+### The Challenge
+
+`pb_list_products` returns only IDs and descriptions (often empty) - no names. You must fetch each product individually to see its name.
+
+### Steps
+
+1. **List Products** - Get all product IDs
+2. **Get Details** - Fetch each product to see name and owner
+3. **Select Parent** - Choose appropriate product
+4. **Create Feature** - Use product ID as parent
+
+### Complete Example
+
+```
+Step 1: List available products
+─────────────────────────────────────────────────
+pb_list_products()
+
+Response:
+{
+  "products": [
+    {"id": "prod-1", "description": ""},
+    {"id": "prod-2", "description": ""},
+    {"id": "prod-3", "description": ""}
+  ]
+}
+
+Step 2: Get details for each product
+─────────────────────────────────────────────────
+pb_entity_get({id: "prod-1"})
+→ {"name": "Mobile App", "owner": "alice@example.com"}
+
+pb_entity_get({id: "prod-2"})
+→ {"name": "Desktop App", "owner": "bob@example.com"}
+
+pb_entity_get({id: "prod-3"})
+→ {"name": "API Platform", "owner": "alice@example.com"}
+
+Step 3: Create feature under chosen product
+─────────────────────────────────────────────────
+pb_entity_create({
+  entityType: "feature",
+  fields: {
+    name: "New Feature",
+    parent: {id: "prod-2"},
+    description: {value: "<p>Feature description</p>"},
+    status: {name: "Candidate"}
+  }
+})
+```
+
+### Key Points
+
+- Many workspaces require features to have a parent
+- Product list doesn't include names - must fetch each one
+- Check owner field to find products you own
+- Components can also be used as parents
+
+---
+
+## Pattern 7: Move Feature Between Parents (Reliable Method)
 
 ### When to Use
 
