@@ -112,10 +112,18 @@ npm run test:mcp   # Run MCP integration smoke tests
 
 Live integration tests require the `PRODUCTBOARD_API_TOKEN` environment variable.
 
+**Environment Variables:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PRODUCTBOARD_API_TOKEN` | Yes | API token (starts with 'eyJ...') |
+| `PRODUCTBOARD_SUBDOMAIN` | No | Workspace subdomain for URLs (default: 'app'). Set to your workspace name (e.g., 'hivenet') for correct ProductBoard links. |
+
 **Set up for testing:**
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
 export PRODUCTBOARD_API_TOKEN="your_api_token_here"
+export PRODUCTBOARD_SUBDOMAIN="hivenet"  # Your workspace subdomain
 source ~/.zshrc
 
 # Verify token is available
@@ -140,6 +148,7 @@ npm run build
 # Add to Claude Code (terminal)
 claude mcp add --transport stdio productboard \
   --env PRODUCTBOARD_API_TOKEN=$PRODUCTBOARD_API_TOKEN \
+  --env PRODUCTBOARD_SUBDOMAIN=hivenet \
   -- node /path/to/dist/index.js
 
 # Verify connection

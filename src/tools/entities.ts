@@ -52,32 +52,19 @@ function getParentId(entity: GenericEntity): string | undefined {
 
 /**
  * Generate ProductBoard web UI URL for an entity
- * Falls back to API URL if html link not available
+ * Uses workspace subdomain from PRODUCTBOARD_SUBDOMAIN env var (default: 'app')
+ * URL format: https://{subdomain}.productboard.com/products-page?d={base64(1:PmEntity:{id})}
  */
 function getProductBoardUrl(entity: GenericEntity): string {
-  // Prefer html link if available
-  if (entity.links.html) {
-    return entity.links.html;
-  }
+  // Get workspace subdomain from environment (default to 'app' for generic URLs)
+  const subdomain = process.env.PRODUCTBOARD_SUBDOMAIN || 'app';
 
-  // Construct web UI URL based on entity type
-  // Note: This may redirect to workspace-specific URL
-  const baseUrl = 'https://app.productboard.com';
-  const typeMap: Record<string, string> = {
-    feature: 'feature-board/id',
-    objective: 'roadmap/objective',
-    product: 'product',
-    component: 'component',
-    subfeature: 'feature-board/id', // Subfeatures use same path as features
-  };
+  // Encode entity reference: "1:PmEntity:{uuid}" → base64
+  const entityRef = `1:PmEntity:${entity.id}`;
+  const encodedRef = Buffer.from(entityRef).toString('base64');
 
-  const path = typeMap[entity.type];
-  if (path) {
-    return `${baseUrl}/${path}/${entity.id}`;
-  }
-
-  // Fallback to API URL for unknown types
-  return entity.links.self;
+  // Generate workspace-specific URL
+  return `https://${subdomain}.productboard.com/products-page?d=${encodedRef}`;
 }
 
 /**
