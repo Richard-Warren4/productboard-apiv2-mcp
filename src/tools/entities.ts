@@ -31,7 +31,7 @@ import {
   EntityTypesInputSchema,
 } from '../schemas/inputs.js';
 import { extractCursor, hasNextPage } from '../utils/pagination.js';
-import { validateRichtext } from '../utils/richtext.js';
+import { validateRichtext, containsHtml, textToHtml } from '../utils/richtext.js';
 import { validateFieldsAgainstConfig, getConfigForValidation } from '../utils/validation.js';
 import {
   buildCustomFieldMapping,
@@ -265,7 +265,10 @@ function processDescriptionField(fields: Record<string, unknown>): {
 
     // Handle string description -> convert to richtext object
     if (typeof desc === 'string') {
-      const validation = validateRichtext(desc);
+      // If plain text (no HTML), auto-wrap in <p> tags for ProductBoard API
+      const htmlContent = containsHtml(desc) ? desc : textToHtml(desc);
+
+      const validation = validateRichtext(htmlContent);
       if (!validation.valid) {
         return {
           processedFields,
@@ -276,7 +279,7 @@ function processDescriptionField(fields: Record<string, unknown>): {
           },
         };
       }
-      processedFields.description = { value: desc };
+      processedFields.description = { value: htmlContent };
     } else if (typeof desc === 'object' && desc !== null) {
       // Already in richtext format, validate the value
       const richtext = desc as { value?: string };

@@ -9,6 +9,8 @@ Auto-generated from all feature plans. Last updated: 2026-01-09
 - TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch (004-generic-entity-support)
 - In-memory session cache for entity configuration (no persistence) (004-generic-entity-support)
 - In-memory session cache for UUID→name mapping (no persistence) (006-custom-fields-support)
+- Markdown + JSON (documentation, no code) + Claude Code skill loading system (assumed compatible with n8n-skills format) (007-pb-skills-poc)
+- N/A (static files) (007-pb-skills-poc)
 
 - TypeScript 5.x with Node.js 20 LTS + @modelcontextprotocol/sdk, zod, native fetch
 
@@ -323,9 +325,9 @@ DELETE /entities/{id}/relationships/{type}/{targetId}
 Path includes `targetId` - no request body.
 
 ## Recent Changes
+- 007-pb-skills-poc: Added Markdown + JSON (documentation, no code) + Claude Code skill loading system (assumed compatible with n8n-skills format)
 - 006-custom-fields-support: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 - 005-consolidate-tools: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
-- 004-generic-entity-support: Added TypeScript 5.4+ with Node.js 20 LTS + @modelcontextprotocol/sdk ^1.0.0, zod ^3.23.0, native fetch
 
 
 <!-- MANUAL ADDITIONS START -->

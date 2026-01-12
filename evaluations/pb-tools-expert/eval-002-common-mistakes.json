@@ -1,0 +1,23 @@
+{
+  "id": "pb-002",
+  "skills": ["pb-tools-expert"],
+  "query": "Search for features that are In Progress",
+  "expected_behavior": [
+    "Recognizes this is a status filter query",
+    "Uses pb_entity_search with statuses filter",
+    "Uses correct case: 'In progress' (lowercase 'p')",
+    "Does NOT use 'In Progress' (uppercase 'P')",
+    "May suggest using pb_get_config to verify exact status names"
+  ],
+  "baseline_without_skill": {
+    "likely_response": "May use 'In Progress' with uppercase P, or suggest manually filtering pb_entity_list results",
+    "expected_quality": "Low"
+  },
+  "with_skill_expected": {
+    "response_quality": "High",
+    "uses_skill_content": true,
+    "provides_correct_tool": true,
+    "uses_correct_case": true,
+    "avoids_documented_mistake": true
+  }
+}

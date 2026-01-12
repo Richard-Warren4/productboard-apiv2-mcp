@@ -1,0 +1,17 @@
+{
+  "name": "pb-mcp-skills",
+  "displayName": "ProductBoard MCP Skills",
+  "version": "1.0.0",
+  "description": "Expert skills for using ProductBoard MCP tools effectively",
+  "category": "productivity",
+  "tags": ["productboard", "mcp", "api", "tools"],
+  "icon": "productboard-icon.png",
+  "screenshots": [],
+  "requirements": {
+    "mcpServers": ["productboard"]
+  },
+  "publisher": {
+    "name": "ProductBoard MCP Contributors",
+    "verified": false
+  }
+}

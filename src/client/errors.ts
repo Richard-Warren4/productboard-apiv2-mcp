@@ -95,15 +95,39 @@ export function handleApiError(
     const title = firstError.title;
     const code = firstError.code;
 
-    // Convert to string safely (objects become JSON)
-    const toString = (val: unknown): string | undefined => {
+    // Extract meaningful message from various error formats
+    const extractMessage = (val: unknown): string | undefined => {
       if (val === undefined || val === null) return undefined;
       if (typeof val === 'string') return val;
-      if (typeof val === 'object') return JSON.stringify(val);
+
+      // Handle nested error objects with message property
+      if (typeof val === 'object') {
+        const obj = val as Record<string, unknown>;
+
+        // Common patterns: {message: "..."}, {error: "..."}, {reason: "..."}
+        if (typeof obj.message === 'string') return obj.message;
+        if (typeof obj.error === 'string') return obj.error;
+        if (typeof obj.reason === 'string') return obj.reason;
+
+        // Field-specific errors: {field: "status", value: "Invalid"}
+        if (obj.field && obj.value) {
+          return `Invalid ${obj.field}: ${obj.value}`;
+        }
+
+        // Array of validation errors
+        if (Array.isArray(obj.errors)) {
+          return obj.errors.map((e) => extractMessage(e)).filter(Boolean).join('; ');
+        }
+
+        // Last resort: stringify but limit length
+        const json = JSON.stringify(val);
+        return json.length > 200 ? `${json.substring(0, 200)}...` : json;
+      }
+
       return String(val);
     };
 
-    message = toString(detail) || toString(title) || toString(code) || 'An unknown error occurred';
+    message = extractMessage(detail) || extractMessage(title) || extractMessage(code) || 'An unknown error occurred';
     details = { errors: errorsArray };
   } else {
     // Fallback for non-standard error formats

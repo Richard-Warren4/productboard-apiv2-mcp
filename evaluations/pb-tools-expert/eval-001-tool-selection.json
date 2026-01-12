@@ -1,0 +1,22 @@
+{
+  "id": "pb-001",
+  "skills": ["pb-tools-expert"],
+  "query": "Find all features owned by sarah@example.com",
+  "expected_behavior": [
+    "Recommends pb_entity_search as the primary tool",
+    "Uses entityType: 'feature' parameter",
+    "Includes owners filter: [{email: 'sarah@example.com'}]",
+    "Does NOT suggest pb_entity_list followed by manual filtering",
+    "Provides correct parameter syntax"
+  ],
+  "baseline_without_skill": {
+    "likely_response": "May suggest pb_entity_list and filter results manually, or use incorrect filter parameter format",
+    "expected_quality": "Medium"
+  },
+  "with_skill_expected": {
+    "response_quality": "High",
+    "uses_skill_content": true,
+    "provides_correct_tool": true,
+    "includes_correct_parameters": true
+  }
+}
