@@ -1,12 +1,24 @@
 {
-  "name": "productboard-mcp",
+  "name": "productboard-apiv2-mcp",
   "version": "0.2.0",
   "description": "MCP server for ProductBoard API v2 integration with Claude",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "productboard-mcp": "./dist/index.js"
+    "productboard-apiv2-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Richard-Warren4/productboard-apiv2-mcp.git"
+  },
+  "homepage": "https://github.com/Richard-Warren4/productboard-apiv2-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Richard-Warren4/productboard-apiv2-mcp/issues"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -34,7 +46,7 @@
     "anthropic",
     "ai"
   ],
-  "author": "",
+  "author": "Richard Warren",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
