@@ -104,41 +104,17 @@ ProductBoard's data model requires subfeatures to belong to a parent feature. Or
 
 ---
 
-## Mistake 3: Using Unsupported "initiative" Entity Type
-
-### The Problem
-
-ProductBoard API v2 does NOT support the "initiative" entity type. Attempting to use it fails.
-
-### Wrong
-
-```json
-{
-  "entityType": "initiative",
-  "name": "Q1 Strategic Initiative"
-}
-```
-
-### Right
-
-```json
-{
-  "entityType": "objective",
-  "fields": {
-    "name": "Q1 Strategic Initiative"
-  }
-}
-```
-
-### Why This Happens
-
-ProductBoard's API v2 has a specific set of supported entity types. While "initiative" might exist in the UI or older API versions, it's not available in v2.
+## Mistake 3: Using Wrong Entity Type
 
 ### Supported Entity Types (API v2)
+
+Per OpenAPI spec, these entity types are supported:
 
 | Type | Creatable | Searchable |
 |------|-----------|------------|
 | objective | Yes | Yes |
+| initiative | Yes | Yes |
+| keyResult | Yes | Yes |
 | product | Yes | No |
 | component | Yes | No |
 | feature | Yes | Yes |
@@ -150,9 +126,8 @@ ProductBoard's API v2 has a specific set of supported entity types. While "initi
 
 ### How to Avoid
 
-1. Use `pb_entity_types()` to see available types
-2. For strategic goals/initiatives, use `objective`
-3. Check the supported types list before creating entities
+1. Use `pb_entity_types()` to see available types for your workspace
+2. Check the supported types list before creating entities
 
 ---
 

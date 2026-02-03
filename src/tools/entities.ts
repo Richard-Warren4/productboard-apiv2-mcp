@@ -44,6 +44,37 @@ import {
 import { getSessionCached, clearSessionCache, normalizeFields } from './config.js';
 
 /**
+ * Normalize teams field to accept flexible input formats.
+ * Accepts:
+ * - String: "Team Name" → [{ name: "Team Name" }]
+ * - Array of strings: ["Team A", "Team B"] → [{ name: "Team A" }, { name: "Team B" }]
+ * - Array of objects: [{ name: "Team" }] → passed through
+ */
+function normalizeTeamsField(fields: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...fields };
+
+  if (normalized.teams !== undefined && normalized.teams !== null) {
+    const teams = normalized.teams;
+
+    // String → array of objects
+    if (typeof teams === 'string') {
+      normalized.teams = [{ name: teams }];
+    }
+    // Array - check if strings or objects
+    else if (Array.isArray(teams)) {
+      normalized.teams = teams.map((team) => {
+        if (typeof team === 'string') {
+          return { name: team };
+        }
+        return team;
+      });
+    }
+  }
+
+  return normalized;
+}
+
+/**
  * Extract parent ID from relationships
  */
 function getParentId(entity: GenericEntity): string | undefined {
@@ -300,7 +331,11 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
   server.tool(
     'pb_entity_create',
     'Create a new ProductBoard entity of any supported type. ' +
-      'Supports: objective, product, component, feature, subfeature, releaseGroup, release, company (8 writable types). ' +
+      'Supports: objective, product, component, feature, subfeature, initiative, keyResult, releaseGroup, release, company (10 writable types). ' +
+      'Custom fields can use display names (e.g., "Reach": 500) which are auto-translated to UUIDs. ' +
+      'Teams accept flexible formats: "Team Name", ["Team A", "Team B"], or [{name: "Team"}]. ' +
+      'Descriptions accept plain text (auto-wrapped in <p> tags) or HTML. Supported tags: h1, h2, p, b, i, u, s, code, pre, blockquote, ul, ol, li, a, hr, br. ' +
+      'Timeframe format: {startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", granularity: "day"|"month"|"quarter"|"year"}. ' +
       'Note: user entities are read-only and cannot be created.',
     {
       entityType: WritableEntityTypeSchema.describe('The type of entity to create'),
@@ -310,7 +345,10 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           description: z.union([z.string(), z.object({ value: z.string() })]).optional().describe('Description (HTML)'),
           status: z.object({ id: z.string().optional(), name: z.string().optional() }).optional().describe('Status'),
           owner: z.object({ id: z.string().optional(), email: z.string().optional() }).optional().describe('Owner'),
-          teams: z.array(z.object({ id: z.string().optional(), name: z.string().optional() })).optional().describe('Teams'),
+          teams: z.union([
+            z.string(),
+            z.array(z.union([z.string(), z.object({ id: z.string().optional(), name: z.string().optional() })]))
+          ]).optional().describe('Teams - accepts "Team Name", ["Team A", "Team B"], or [{name: "Team"}]'),
           parent: z.object({ id: z.string() }).optional().describe('Parent entity'),
         })
         .passthrough()
@@ -328,8 +366,11 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           return toMcpError(descError);
         }
 
+        // Normalize teams field format (accept string, array of strings, or array of objects)
+        const normalizedFields = normalizeTeamsField(processedFields);
+
         // Extract relationships from fields
-        const { cleanFields, relationships } = extractRelationships(processedFields);
+        const { cleanFields, relationships } = extractRelationships(normalizedFields);
 
         // Validate fields against configuration (warn-only, non-blocking)
         const validationWarnings: ValidationWarning[] = [];
@@ -339,8 +380,26 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           validationWarnings.push(...validation.warnings);
         }
 
+        // Transform custom field names to UUIDs for API (feature/subfeature only)
+        let fieldsToCreate = cleanFields;
+        let customFieldMapping: CustomFieldMapping | undefined;
+        if (entityType === 'feature' || entityType === 'subfeature') {
+          customFieldMapping = await getCustomFieldMapping(client, entityType);
+          if (customFieldMapping && customFieldMapping.byName.size > 0) {
+            const { transformedFields, warnings: transformWarnings } = transformFieldsForUpdate(
+              cleanFields,
+              customFieldMapping
+            );
+            fieldsToCreate = transformedFields;
+            // Add transformation warnings to validation warnings
+            for (const warning of transformWarnings) {
+              validationWarnings.push({ field: 'custom', issue: 'invalid_value', message: warning });
+            }
+          }
+        }
+
         // Create entity
-        const createResponse = await client.createEntity(entityType, cleanFields, relationships);
+        const createResponse = await client.createEntity(entityType, fieldsToCreate, relationships);
 
         // Fetch complete entity if response is partial
         let entity = createResponse.data;
@@ -357,7 +416,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
 
         const result: Record<string, unknown> = {
           message: `${entityType} created successfully`,
-          entity: formatEntity(entity),
+          entity: formatEntity(entity, customFieldMapping),
         };
 
         if (validationWarnings.length > 0) {
@@ -435,7 +494,10 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
     'pb_entity_update',
     'Update properties of an existing ProductBoard entity. ' +
       'Only provided fields will be updated; others remain unchanged. ' +
-      'Note: user entities are read-only and cannot be updated.',
+      'Custom fields can use display names (e.g., "Reach": 500) which are auto-translated to UUIDs. ' +
+      'Teams accept flexible formats: "Team Name", ["Team A", "Team B"], or [{name: "Team"}]. ' +
+      'Timeframe format: {startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", granularity: "day"|"month"|"quarter"|"year"}. ' +
+      'Note: user entities are read-only.',
     {
       id: z.string().describe('Entity UUID'),
       fields: z
@@ -444,7 +506,10 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           description: z.union([z.string(), z.object({ value: z.string() })]).optional().describe('New description'),
           status: z.object({ id: z.string().optional(), name: z.string().optional() }).optional().describe('New status'),
           owner: z.object({ id: z.string().optional(), email: z.string().optional() }).optional().describe('New owner'),
-          teams: z.array(z.object({ id: z.string().optional(), name: z.string().optional() })).optional().describe('New teams'),
+          teams: z.union([
+            z.string(),
+            z.array(z.union([z.string(), z.object({ id: z.string().optional(), name: z.string().optional() })]))
+          ]).optional().describe('Teams - accepts "Team Name", ["Team A", "Team B"], or [{name: "Team"}]'),
         })
         .passthrough()
         .describe('Fields to update (partial update supported)'),
@@ -472,9 +537,12 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           return toMcpError(descError);
         }
 
+        // Normalize teams field format
+        const normalizedFields = normalizeTeamsField(processedFields);
+
         // Track what fields are being updated
-        const updatedFields = Object.keys(processedFields).filter(
-          (key) => processedFields[key] !== undefined
+        const updatedFields = Object.keys(normalizedFields).filter(
+          (key) => normalizedFields[key] !== undefined
         );
 
         if (updatedFields.length === 0) {
@@ -489,12 +557,12 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         const validationWarnings: ValidationWarning[] = [];
         const entityConfig = await getConfigForValidation(client, entityType, getSessionCached);
         if (entityConfig) {
-          const validation = validateFieldsAgainstConfig(processedFields, entityConfig, 'update');
+          const validation = validateFieldsAgainstConfig(normalizedFields, entityConfig, 'update');
           validationWarnings.push(...validation.warnings);
         }
 
         // Transform custom field names to UUIDs for API (feature/subfeature only)
-        let fieldsToUpdate = processedFields;
+        let fieldsToUpdate = normalizedFields;
         if (entityType === 'feature' || entityType === 'subfeature') {
           const customFieldMapping = await getCustomFieldMapping(client, entityType);
           if (customFieldMapping && customFieldMapping.byName.size > 0) {
@@ -542,7 +610,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
   server.tool(
     'pb_entity_list',
     'List ProductBoard entities of a specific type with pagination. ' +
-      'Supports all 9 entity types: objective, product, component, feature, subfeature, releaseGroup, release, company, user. ' +
+      'Supports all 11 entity types: objective, product, component, feature, subfeature, initiative, keyResult, releaseGroup, release, company, user. ' +
       'Returns 100 items per page (API does not support custom page size).',
     {
       entityType: EntityTypeSchema.describe('The type of entities to list'),
@@ -579,7 +647,7 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
   server.tool(
     'pb_entity_search',
     'Search ProductBoard entities with filters. ' +
-      'Supported for: feature, subfeature, objective. ' +
+      'Supported for: feature, subfeature, objective, initiative, keyResult. ' +
       'Filters: name (partial), statuses, owners, parent, archived, ids. ' +
       'Returns 100 items per page (API does not support custom page size). ' +
       'NOTE: Team filtering is NOT supported - use client-side filtering after fetching. ' +

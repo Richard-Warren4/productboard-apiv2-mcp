@@ -167,8 +167,8 @@ claude mcp add --transport stdio productboard \
 **Known Edge Cases:**
 - Status names are **case-sensitive**: "In progress" works, "In Progress" fails
 - Config for single entity type returns object, not array
-- `initiative` entity type is NOT supported by API v2
 - `pageSize` parameter is not supported (API returns 100 items/page)
+- Entity types per OpenAPI: product, component, feature, subfeature, initiative, objective, keyResult, release, releaseGroup
 
 ## Code Style
 
@@ -218,12 +218,11 @@ See `.specify/memory/constitution.md` for the authoritative reference.
 - The official ProductBoard docs show a `filter` property but that does NOT work
 - All filters must be direct properties under `data`
 - `pageSize` query parameter is NOT supported - API always returns 100 items per page
-- `initiative` entity type is NOT supported by the search endpoint
 
 **Supported filter parameters**:
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `type` | string | **Required**. Entity type to search (feature, subfeature, objective) |
+| `type` | string | **Required**. Entity type to search (feature, subfeature, objective, initiative, keyResult, etc.) |
 | `name` | string | Text search (partial, case-insensitive) |
 | `statuses` | array | Filter by status: `[{"name": "In Progress"}, {"name": "At Risk"}]` |
 | `owners` | array | Filter by owner: `[{"email": "john@doe.com"}]` or `[{"id": "..."}]` |

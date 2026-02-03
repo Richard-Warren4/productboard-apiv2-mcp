@@ -168,24 +168,13 @@ pb_entity_search({entityType: "feature", pageCursor: "abc123"})
 
 ---
 
-## Entity Type: Initiative Not Supported
+## Supported Entity Types
 
-### Limitation
-
-The `initiative` entity type does NOT exist in ProductBoard API v2.
-
-### Use Instead
-
-For strategic goals and initiatives, use the `objective` entity type:
-
-```
-pb_entity_create({
-  entityType: "objective",
-  fields: {
-    name: "Q1 Strategic Initiative"
-  }
-})
-```
+Per OpenAPI spec, supported entity types are:
+- `product`, `component`, `feature`, `subfeature`
+- `initiative`, `objective`, `keyResult`
+- `release`, `releaseGroup`
+- `company`, `user` (separate API endpoints)
 
 ---
 

@@ -16,9 +16,8 @@
  * All entity types supported by ProductBoard API v2.
  * Note: 'user' is read-only (no create/update operations)
  *
- * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
- * Configuration endpoint only returns: objective, product, component, feature,
- * subfeature, releaseGroup, release, company, user
+ * Per OpenAPI spec: product, component, feature, subfeature, initiative, objective, keyResult, release, releaseGroup
+ * Plus company and user (separate API endpoints)
  */
 export type EntityType =
   | 'objective'
@@ -26,6 +25,8 @@ export type EntityType =
   | 'component'
   | 'feature'
   | 'subfeature'
+  | 'initiative'
+  | 'keyResult'
   | 'releaseGroup'
   | 'release'
   | 'company'
@@ -40,10 +41,8 @@ export type WritableEntityType = Exclude<EntityType, 'user'>;
  * Entity types that support search operations.
  * Note: Search supports additional filters not available on list endpoint:
  * - statuses, owners, parent, archived, ids (all searchable types)
- *
- * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
  */
-export type SearchableEntityType = 'feature' | 'subfeature' | 'objective';
+export type SearchableEntityType = 'feature' | 'subfeature' | 'objective' | 'initiative' | 'keyResult';
 
 // =============================================================================
 // Field Value Types (Read - returned from API)

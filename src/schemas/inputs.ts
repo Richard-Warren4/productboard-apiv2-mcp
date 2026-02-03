@@ -74,7 +74,8 @@ export const ListProductsInputSchema = z.object({
  * All entity types supported by ProductBoard API v2.
  * Note: 'user' is read-only (no create/update operations)
  *
- * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
+ * Per OpenAPI spec: product, component, feature, subfeature, initiative, objective, keyResult, release, releaseGroup
+ * Plus company and user (separate API endpoints)
  */
 export const EntityTypeSchema = z.enum([
   'objective',
@@ -82,6 +83,8 @@ export const EntityTypeSchema = z.enum([
   'component',
   'feature',
   'subfeature',
+  'initiative',
+  'keyResult',
   'releaseGroup',
   'release',
   'company',
@@ -90,6 +93,8 @@ export const EntityTypeSchema = z.enum([
 
 /**
  * Entity types that support write operations (excludes 'user')
+ * Per OpenAPI spec: product, component, feature, subfeature, initiative, objective, keyResult, release, releaseGroup
+ * Plus company (separate API endpoint)
  */
 export const WritableEntityTypeSchema = z.enum([
   'objective',
@@ -97,6 +102,8 @@ export const WritableEntityTypeSchema = z.enum([
   'component',
   'feature',
   'subfeature',
+  'initiative',
+  'keyResult',
   'releaseGroup',
   'release',
   'company',
@@ -104,8 +111,7 @@ export const WritableEntityTypeSchema = z.enum([
 
 /**
  * Entity types that support search operations.
- *
- * NOTE: 'initiative' is NOT supported by ProductBoard API v2 (verified 2025-12-15)
+ * Per OpenAPI spec EntitySearch schema.
  *
  * IMPORTANT: Search supports additional filters not available via list endpoint.
  * See CLAUDE.md and research.md for complete filter reference.
@@ -114,6 +120,8 @@ export const SearchableEntityTypeSchema = z.enum([
   'feature',
   'subfeature',
   'objective',
+  'initiative',
+  'keyResult',
 ]);
 
 /**
@@ -171,7 +179,10 @@ export const GenericEntityFieldsSchema = z
     description: z.union([z.string(), RichtextValueSchema]).optional().describe('Entity description (HTML)'),
     status: StatusAssignSchema.optional().describe('Status (provide id OR name)'),
     owner: OwnerAssignSchema.optional().describe('Owner (provide id OR email)'),
-    teams: z.array(TeamAssignSchema).optional().describe('Team assignments'),
+    teams: z.union([
+      z.string(),
+      z.array(z.union([z.string(), TeamAssignSchema]))
+    ]).optional().describe('Teams - accepts "Team Name", ["Team A", "Team B"], or [{name: "Team"}]'),
     parent: EntityReferenceSchema.optional().describe('Parent entity reference'),
   })
   .passthrough(); // Allow custom fields from workspace configuration
@@ -202,7 +213,10 @@ export const EntityUpdateInputSchema = z.object({
       description: z.union([z.string(), RichtextValueSchema]).optional().describe('New description (HTML)'),
       status: StatusAssignSchema.optional().describe('New status'),
       owner: OwnerAssignSchema.optional().describe('New owner'),
-      teams: z.array(TeamAssignSchema).optional().describe('New team assignments'),
+      teams: z.union([
+        z.string(),
+        z.array(z.union([z.string(), TeamAssignSchema]))
+      ]).optional().describe('Teams - accepts "Team Name", ["Team A", "Team B"], or [{name: "Team"}]'),
     })
     .passthrough()
     .describe('Fields to update (partial update supported)'),

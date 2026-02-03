@@ -4,28 +4,42 @@
  * ProductBoard Entity APIs return 400 errors for unsupported HTML tags.
  * This module validates richtext content before submission.
  *
- * Supported tags (verified via live testing 2025-12-15):
- * b, i, s, u, br, a, code, img, p
+ * Supported tags (per official docs https://developer.productboard.com/v2.0.0/reference/richtext):
+ * h1, h2, p, b, i, u, code, ul, ol, li, a, hr, pre, blockquote, s
  *
- * Rejected tags include: strong (use b), em (use i), div, span, h1-h6
+ * Additionally supported (common HTML): br, img
+ *
+ * Rejected tags include: strong (use b), em (use i), div, span, h3-h6
  *
  * @module utils/richtext
  */
 
 /**
  * Set of allowed HTML tags in ProductBoard richtext fields
- * (verified via live testing against ProductBoard API)
+ * (per official API documentation 2026-02-02)
  */
 const ALLOWED_TAGS = new Set([
-  'b',    // Bold (NOT <strong>)
-  'i',    // Italic (NOT <em>)
-  's',    // Strikethrough
-  'u',    // Underline
-  'br',   // Line break
-  'a',    // Links
-  'code', // Inline code
-  'img',  // Images
-  'p',    // Paragraphs
+  // Headers (official docs show h1, h2)
+  'h1',
+  'h2',
+  // Text formatting
+  'p',          // Paragraphs
+  'b',          // Bold (NOT <strong>)
+  'i',          // Italic (NOT <em>)
+  's',          // Strikethrough
+  'u',          // Underline
+  'code',       // Inline code
+  'pre',        // Code block
+  'blockquote', // Block quote
+  // Lists
+  'ul',         // Unordered list
+  'ol',         // Ordered list
+  'li',         // List item
+  // Other
+  'a',          // Links
+  'hr',         // Horizontal line
+  'br',         // Line break (common HTML)
+  'img',        // Images (common HTML)
 ]);
 
 /**
@@ -34,8 +48,12 @@ const ALLOWED_TAGS = new Set([
 const TAG_SUGGESTIONS: Record<string, string> = {
   'strong': 'b',
   'em': 'i',
+  'h3': 'h2',   // h3-h6 not supported, suggest h2
+  'h4': 'h2',
+  'h5': 'h2',
+  'h6': 'h2',
   'div': 'p',
-  'span': '',  // Just remove span, keep content
+  'span': '',   // Just remove span, keep content
 };
 
 /**

@@ -57,7 +57,7 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 | 3.7 | "Create a component named 'Test Component' under product [ID]" | Uses `pb_entity_create(entityType: "component", fields: {name, parent: {id}})`, creates component with parent relationship |
 
 **Edge Cases Discovered**:
-- `initiative` entity type is NOT supported by API v2 (verified 2025-12-15)
+- Per OpenAPI spec (validated 2026-02-02): `initiative` and `keyResult` ARE valid entity types
 - `pageSize` parameter is not supported, API returns 100 items per page
 - Component creation requires parent product in fields.parent (verified 2026-01-09)
 
