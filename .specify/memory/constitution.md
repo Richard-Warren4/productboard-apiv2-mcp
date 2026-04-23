@@ -1,16 +1,15 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.2.2 → 1.3.0
-Bump rationale: MINOR - Added new principle (VI: MCP Integration Testing) requiring all changes
-to be tested by actually using the MCP server from an AI assistant's perspective.
+Version change: 1.3.0 → 1.4.0
+Bump rationale: MINOR - Rewrote Principle IV from "API Beta Awareness" to "API GA Stability"
+to reflect ProductBoard API v2 becoming generally available (March 2026). v1 is deprecated
+and sunsets 2026-07-08.
 
-Modified principles: None
+Modified principles:
+- IV. API Beta Awareness → IV. API GA Stability (rewrite)
 
-Added sections:
-- Principle VI: MCP Integration Testing (new principle requiring real MCP invocation testing)
-- Updated Development Workflow with Pre-Merge Testing Process
-- References specs/mcp-test-checklist.md for test scenarios
+Added sections: None
 
 Removed sections: None
 
@@ -21,8 +20,7 @@ Templates requiring updates:
 - .specify/templates/checklist-template.md: ✅ reviewed - no updates required
 - .specify/templates/agent-file-template.md: ✅ reviewed - no updates required
 
-Follow-up TODOs:
-- Created specs/mcp-test-checklist.md with comprehensive test scenarios
+Follow-up TODOs: None
 -->
 
 # ProductBoard API v2 MCP Server Constitution
@@ -72,19 +70,22 @@ The MCP server MUST faithfully represent ProductBoard API v2 capabilities withou
 **Rationale**: AI models using this MCP server depend on accurate representations of what ProductBoard
 can do. Hiding or transforming API behavior creates unpredictable AI interactions.
 
-### IV. API Beta Awareness
+### IV. API GA Stability
 
-The MCP server MUST acknowledge and handle the beta status of ProductBoard API v2.
+The MCP server MUST track the supported lifecycle of ProductBoard's public APIs.
 
-- Documentation MUST clearly indicate which features depend on beta API endpoints
-- Implementation MUST NOT assume API stability; response formats may change
-- Error handling MUST gracefully handle unexpected response structures
-- Version tracking MUST note which ProductBoard API v2 schema version was tested
-- Users MUST be informed that the underlying API is in beta and subject to changes
+- ProductBoard API v2 is **generally available** as of 2026; ProductBoard API v1 is **deprecated**
+  and sunsets on **2026-07-08**. New work MUST target v2.
+- Implementation MUST defensively handle response shape drift (the GA API may still evolve via
+  additive changes, e.g. the FieldValueItem rename and `inline → data` array shift in March 2026).
+- Error handling MUST gracefully handle unexpected response structures.
+- Version tracking MUST note which ProductBoard API v2 schema revision was tested.
+- The official ProductBoard developer changelog SHOULD be reviewed when planning changes that
+  touch endpoint shapes, request bodies, or response parsing.
 
-**Rationale**: ProductBoard API v2 is currently in beta status, intended for experimentation and
-early integrations rather than production systems. Acknowledging this prevents false expectations
-of stability and encourages defensive coding practices.
+**Rationale**: The API is now GA and integrations may rely on it for production use. Pinning
+expectations to a fixed point in time is brittle; the principle still requires defensive parsing
+because additive changes to the GA contract continue to land.
 
 ### V. Documentation-Verified Implementation
 
@@ -132,7 +133,7 @@ This section defines constraints specific to ProductBoard API v2 integration.
 ### Base Configuration
 
 - **Base URL**: `https://api.productboard.com/v2`
-- **API Status**: Beta (not recommended for production use per official documentation)
+- **API Status**: Generally Available (GA). ProductBoard API v1 is deprecated and sunsets on 2026-07-08.
 
 ### Authentication
 
@@ -281,7 +282,8 @@ All filter properties are optional.
 ### Versioning
 
 - MCP server version MUST track compatibility with ProductBoard API v2 schema version
-- Breaking changes to the beta API SHOULD trigger minor version bumps in the MCP server
+- Breaking changes to the GA API MUST trigger a minor (or major, when warranted) version bump
+  in the MCP server, with a changelog entry citing the source changelog/reference URL
 
 ## Development Workflow
 
@@ -317,4 +319,4 @@ This constitution is the authoritative source for development standards in this 
 3. Update version number according to semantic versioning
 4. Update any dependent templates or documentation
 
-**Version**: 1.3.0 | **Ratified**: 2025-12-12 | **Last Amended**: 2025-12-15
+**Version**: 1.4.0 | **Ratified**: 2025-12-12 | **Last Amended**: 2026-04-23

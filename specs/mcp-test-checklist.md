@@ -23,8 +23,10 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 |------|-------------|-----------------|
 | 1.1 | "Get ProductBoard configuration for features" | Returns feature config with fields, no errors |
 | 1.2 | "Get ProductBoard configuration for all entity types" | Returns array of all entity type configs |
-| 1.3 | "What entity types are available in ProductBoard?" | Lists all 9 entity types with field counts |
+| 1.3 | "What entity types are available in ProductBoard?" | Lists all 11 entity types with field counts |
 | 1.4 | "Refresh the ProductBoard configuration cache" | Successfully clears and refreshes cache |
+| 1.5 | "Get ProductBoard configuration for initiatives" | `pb_get_config({entityType:"initiative"})` returns config with fields |
+| 1.6 | "Get ProductBoard configuration for key results" | `pb_get_config({entityType:"keyResult"})` returns config with fields |
 
 **Edge Cases Discovered**:
 - Single entity type returns object, not array (fixed 2025-12-15)
@@ -55,11 +57,16 @@ Tests are run by actually invoking MCP tools from Claude Code or another MCP cli
 | 3.5 | "List products in ProductBoard" | Returns products |
 | 3.6 | "List components in ProductBoard" | Returns components |
 | 3.7 | "Create a component named 'Test Component' under product [ID]" | Uses `pb_entity_create(entityType: "component", fields: {name, parent: {id}})`, creates component with parent relationship |
+| 3.8 | "Search for initiatives in ProductBoard" | `pb_entity_search({entityType:"initiative"})` returns results without 400 |
+| 3.9 | "Search for key results in ProductBoard" | `pb_entity_search({entityType:"keyResult"})` returns results without 400 |
+| 3.10 | "Create an initiative named 'MCP Test Initiative'" | `pb_entity_create({entityType:"initiative", fields:{name:"..."}})` creates and returns ID |
+| 3.11 | "List features and initiatives together" | `pb_entity_list({entityTypes:["feature","initiative"]})` issues a single request with `?type[]=feature&type[]=initiative` and returns a mixed-type page |
 
 **Edge Cases Discovered**:
-- Per OpenAPI spec (validated 2026-02-02): `initiative` and `keyResult` ARE valid entity types
+- Per OpenAPI spec (validated 2026-02-02) and confirmed in the GA changelog (2026-03-09): `initiative` and `keyResult` ARE valid entity types
 - `pageSize` parameter is not supported, API returns 100 items per page
 - Component creation requires parent product in fields.parent (verified 2026-01-09)
+- `GET /entities` accepts `type[]=` array notation for multi-type listing (GA, March 2026 changelog)
 
 ### 4. Relationship Operations
 

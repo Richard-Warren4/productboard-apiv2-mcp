@@ -4,11 +4,11 @@
 
 An MCP (Model Context Protocol) server that enables Claude Desktop and Claude Code to interact with ProductBoard API v2 for feature management.
 
-> **Beta API Notice**: This MCP server uses ProductBoard API v2, which is currently in beta status. API behavior may change without notice. Not recommended for production-critical workflows.
+> **API Status**: ProductBoard API v2 is generally available (GA) as of 2026. ProductBoard API v1 is deprecated and sunsets on **2026-07-08** — migrate any v1 integrations before that date.
 
 ## Features
 
-- **Entity Management**: Full CRUD for features, subfeatures, objectives, products, components, releases, and companies
+- **Entity Management**: Full CRUD for features, subfeatures, objectives, initiatives, key results, products, components, releases, and companies
 - **Relationship Management**: View, create, and remove relationships between entities
 - **Search & Filter**: Search entities with status, owner, parent, and custom field filters
 - **Configuration Discovery**: Explore available fields, products, and components
@@ -88,11 +88,11 @@ Restart Claude Desktop and ask: "List my ProductBoard features"
 
 | Tool | Description |
 |------|-------------|
-| `pb_entity_create` | Create any entity (feature, subfeature, objective, product, component, release, company) |
+| `pb_entity_create` | Create any entity (feature, subfeature, objective, initiative, keyResult, product, component, release, releaseGroup, company) |
 | `pb_entity_get` | Get entity details by ID (auto-detects type) |
 | `pb_entity_update` | Update entity properties |
-| `pb_entity_list` | List entities of a type with pagination |
-| `pb_entity_search` | Search entities with filters (status, owner, parent, custom fields) |
+| `pb_entity_list` | List entities of a type with pagination (`entityType` for one, `entityTypes` for multi-type via `type[]`) |
+| `pb_entity_search` | Search entities with filters (status, owner, parent, custom fields). Supported types: feature, subfeature, objective, initiative, keyResult |
 | `pb_entity_types` | List available entity types and field configurations |
 | `pb_refresh_config` | Force refresh of cached configuration |
 

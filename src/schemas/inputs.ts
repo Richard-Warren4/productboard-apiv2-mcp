@@ -52,7 +52,7 @@ export const RemoveRelationshipInputSchema = z.object({
 
 export const GetConfigInputSchema = z.object({
   entityType: z
-    .enum(['feature', 'subfeature'])
+    .enum(['feature', 'subfeature', 'objective', 'initiative', 'keyResult'])
     .optional()
     .describe('Entity type to get config for (default: all)'),
 });
@@ -227,11 +227,24 @@ export const EntityUpdateInputSchema = z.object({
  *
  * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
  * It returns 100 items per page. Use pageCursor for subsequent pages.
+ *
+ * Supply either `entityType` (single) or `entityTypes` (multi). When `entityTypes`
+ * is supplied, the client serializes it to repeated `type[]=…` query params, which
+ * the GA API supports for multi-type listing.
  */
-export const EntityListInputSchema = z.object({
-  entityType: EntityTypeSchema.describe('The type of entities to list'),
-  pageCursor: z.string().optional().describe('Cursor for pagination'),
-});
+export const EntityListInputSchema = z
+  .object({
+    entityType: EntityTypeSchema.optional().describe('The type of entities to list'),
+    entityTypes: z
+      .array(EntityTypeSchema)
+      .min(1)
+      .optional()
+      .describe('Multiple entity types to list (sent as repeated type[]= query params)'),
+    pageCursor: z.string().optional().describe('Cursor for pagination'),
+  })
+  .refine((data) => Boolean(data.entityType) !== Boolean(data.entityTypes), {
+    message: 'Provide exactly one of entityType or entityTypes',
+  });
 
 /**
  * Custom field filter operator schema.
