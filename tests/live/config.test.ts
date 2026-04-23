@@ -102,6 +102,36 @@ describe('Configuration Discovery (US1)', () => {
     });
   });
 
+  describe('getEntityConfiguration - Initiative (GA)', () => {
+    it('should return configuration for the initiative entity type', async () => {
+      const response = await client.getEntityConfiguration('initiative');
+      expect(response).toHaveProperty('data');
+
+      const fields = Array.isArray(response.data)
+        ? response.data.find((c) => c.type === 'initiative')?.fields
+        : response.data.fields;
+
+      expect(fields).toBeDefined();
+      const fieldsList = Array.isArray(fields) ? fields : Object.values(fields ?? {});
+      expect(fieldsList.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getEntityConfiguration - KeyResult (GA)', () => {
+    it('should return configuration for the keyResult entity type', async () => {
+      const response = await client.getEntityConfiguration('keyResult');
+      expect(response).toHaveProperty('data');
+
+      const fields = Array.isArray(response.data)
+        ? response.data.find((c) => c.type === 'keyResult')?.fields
+        : response.data.fields;
+
+      expect(fields).toBeDefined();
+      const fieldsList = Array.isArray(fields) ? fields : Object.values(fields ?? {});
+      expect(fieldsList.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('Configuration Caching', () => {
     it('should return data on subsequent calls', async () => {
       // First call

@@ -609,27 +609,39 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
   // ===========================================================================
   server.tool(
     'pb_entity_list',
-    'List ProductBoard entities of a specific type with pagination. ' +
+    'List ProductBoard entities with pagination. ' +
       'Supports all 11 entity types: objective, product, component, feature, subfeature, initiative, keyResult, releaseGroup, release, company, user. ' +
+      'Provide either `entityType` (single) or `entityTypes` (array, sent as repeated `type[]=` query params for multi-type listing). ' +
       'Returns 100 items per page (API does not support custom page size).',
     {
-      entityType: EntityTypeSchema.describe('The type of entities to list'),
+      entityType: EntityTypeSchema.optional().describe('A single entity type to list'),
+      entityTypes: z
+        .array(EntityTypeSchema)
+        .min(1)
+        .optional()
+        .describe('Multiple entity types to list (sent as repeated type[]= params)'),
       pageCursor: z.string().optional().describe('Cursor for pagination (from previous response)'),
     },
     async (args) => {
       try {
-        // Validate input
+        // Validate input — exactly one of entityType / entityTypes must be set.
         const input = EntityListInputSchema.parse(args);
 
-        // Get custom field mapping for transformation (feature/subfeature only)
-        const customFieldMapping = await getCustomFieldMapping(client, input.entityType);
+        const typeArg = input.entityTypes ?? input.entityType!;
+        const reportedType = Array.isArray(typeArg) ? typeArg.join(',') : typeArg;
+
+        // Custom field mapping is only meaningful for single-type calls
+        // (and only feature/subfeature today). For multi-type listings, skip.
+        const customFieldMapping = Array.isArray(typeArg)
+          ? undefined
+          : await getCustomFieldMapping(client, typeArg);
 
         // Fetch entities (pageSize not supported by API - always returns 100)
-        const response = await client.listEntities(input.entityType, {
+        const response = await client.listEntities(typeArg, {
           pageCursor: input.pageCursor,
         });
 
-        const result = formatEntityList(response.data, input.entityType, {
+        const result = formatEntityList(response.data, reportedType, {
           nextCursor: extractCursor(response.links.next),
           hasMore: hasNextPage(response),
         }, customFieldMapping);

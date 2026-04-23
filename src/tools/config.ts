@@ -31,6 +31,24 @@ type RawApiConfigResponse = Awaited<ReturnType<ProductBoardClient['getEntityConf
  * Schema names like "RichTextFieldValue" need to be mapped to our types
  * Supports both actual API format (schema) and legacy type definition (type)
  */
+/** A single selectable option for status / single-select / multi-select fields. */
+interface FieldValueItem {
+  id: string;
+  name: string;
+  assignedEntityTypes?: string[];
+}
+
+/**
+ * GA option set wrapper. ProductBoard's March 2026 changelog replaced the old
+ * `inline: [...]` shape with `{ data: [...], links: { next? } }` and renamed
+ * `FieldInlineValues` to `FieldValueItem`. We accept both shapes during reads.
+ */
+interface FieldValuesEnvelope {
+  data?: FieldValueItem[];
+  inline?: FieldValueItem[]; // legacy shape, kept for tolerant parsing
+  links?: { next?: string | null };
+}
+
 interface RawApiField {
   id: string;
   name: string;
@@ -50,7 +68,10 @@ interface RawApiField {
     maxLength?: number;
   };
   links?: { self: string | null };
-  options?: Array<{ id: string; name: string }>;
+  /** Legacy: select-field options inline on the field. */
+  options?: FieldValueItem[];
+  /** GA: select-field options under a paginated envelope. */
+  values?: FieldValuesEnvelope;
 }
 
 /**
@@ -107,6 +128,22 @@ export function normalizeFields(fieldsObj: Record<string, RawApiField> | RawApiF
 }
 
 /**
+ * Read selectable options from either the legacy inline shape or the GA
+ * `values: { data, links: { next } }` envelope (introduced in the March 2026
+ * changelog along with the FieldInlineValues → FieldValueItem rename).
+ *
+ * If `values.links.next` is present we cap at the first page; following the
+ * cursor for option enumeration is intentionally out of scope here.
+ */
+export function extractFieldOptions(field: RawApiField): FieldValueItem[] | undefined {
+  if (field.options && field.options.length > 0) return field.options;
+  const env = field.values;
+  if (!env) return undefined;
+  const items = env.data ?? env.inline;
+  return items && items.length > 0 ? items : undefined;
+}
+
+/**
  * Normalize a single field from API format to our format
  * Handles both actual API format (schema) and legacy type definition (type)
  */
@@ -129,6 +166,8 @@ function normalizeField(field: RawApiField): NormalizedField {
   // Determine required: check constraints if available, fall back to required property
   const isRequired = field.constraints?.required ?? field.required ?? false;
 
+  const options = extractFieldOptions(field);
+
   return {
     id: field.id,
     name: field.name,
@@ -136,7 +175,7 @@ function normalizeField(field: RawApiField): NormalizedField {
     type,
     required: isRequired,
     readOnly: isReadOnly,
-    options: field.options,
+    options: options?.map((o) => ({ id: o.id, name: o.name })),
   };
 }
 
@@ -283,10 +322,11 @@ export function registerConfigTools(server: McpServer, client: ProductBoardClien
     'pb_get_config',
     'Get ProductBoard configuration for entity types. ' +
       'Returns available fields with names, types, required status, and options for select fields. ' +
-      'Use this to discover what fields are available in your workspace before creating or updating features.',
+      'Supports the searchable entity types: feature, subfeature, objective, initiative, keyResult. ' +
+      'Use this to discover what fields are available in your workspace before creating or updating entities.',
     {
       entityType: z
-        .enum(['feature', 'subfeature'])
+        .enum(['feature', 'subfeature', 'objective', 'initiative', 'keyResult'])
         .optional()
         .describe('Entity type to get config for (default: all)'),
     },

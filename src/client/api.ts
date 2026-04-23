@@ -64,22 +64,33 @@ export class ProductBoardClient {
   }
 
   /**
-   * Make an authenticated request to the ProductBoard API
+   * Make an authenticated request to the ProductBoard API.
+   *
+   * Query params accept either a scalar string or a string[]. Arrays are serialized
+   * as repeated `key[]=value` entries (e.g. `type[]=feature&type[]=initiative`),
+   * which is the form ProductBoard documented in their March 2026 changelog for
+   * multi-type listing on `GET /entities`.
    */
   private async request<T>(
     method: string,
     path: string,
     options: {
       body?: unknown;
-      params?: Record<string, string | undefined>;
+      params?: Record<string, string | string[] | undefined>;
     } = {}
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
 
-    // Add query parameters
+    // Add query parameters; arrays become repeated `key[]=value` entries.
     if (options.params) {
       Object.entries(options.params).forEach(([key, value]) => {
-        if (value !== undefined) {
+        if (value === undefined) return;
+        if (Array.isArray(value)) {
+          const arrayKey = key.endsWith('[]') ? key : `${key}[]`;
+          for (const item of value) {
+            url.searchParams.append(arrayKey, item);
+          }
+        } else {
           url.searchParams.set(key, value);
         }
       });
@@ -609,23 +620,27 @@ export class ProductBoardClient {
   }
 
   /**
-   * List entities of a specific type with pagination
+   * List entities of one or more types with pagination.
+   *
+   * Pass a single `EntityType` for the classic `?type=feature` form, or an array
+   * of `EntityType` to use the GA `?type[]=feature&type[]=initiative` form
+   * (added in the ProductBoard March 2026 changelog).
    *
    * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
    * It returns 100 items per page. Use pageCursor for subsequent pages.
-   *
-   * @param entityType - The type of entities to list
-   * @param params - Pagination parameters (pageCursor only)
    */
   async listEntities(
-    entityType: EntityType,
+    entityTypeOrTypes: EntityType | EntityType[],
     params?: {
       pageCursor?: string;
     }
   ): Promise<PaginatedResponse<GenericEntity>> {
+    const isArray = Array.isArray(entityTypeOrTypes);
     return this.request<PaginatedResponse<GenericEntity>>('GET', '/entities', {
       params: {
-        type: entityType,
+        ...(isArray
+          ? { 'type[]': entityTypeOrTypes }
+          : { type: entityTypeOrTypes }),
         pageCursor: params?.pageCursor,
       },
     });

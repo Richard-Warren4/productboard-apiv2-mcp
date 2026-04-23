@@ -33,11 +33,11 @@ specs/          # Design documentation
 
 | Tool | Description |
 |------|-------------|
-| `pb_entity_create` | Create any entity (objective, product, component, feature, subfeature, releaseGroup, release, company) |
+| `pb_entity_create` | Create any entity (objective, product, component, feature, subfeature, initiative, keyResult, releaseGroup, release, company) |
 | `pb_entity_get` | Get entity by ID (auto-detects type) |
 | `pb_entity_update` | Update any entity (partial update supported) |
-| `pb_entity_list` | List entities of a type with pagination |
-| `pb_entity_search` | Search entities (feature, subfeature, objective) with filters and custom field filtering |
+| `pb_entity_list` | List entities of one or more types with pagination (`entityType` for single, `entityTypes` for multi-type via `type[]`) |
+| `pb_entity_search` | Search entities (feature, subfeature, objective, initiative, keyResult) with filters and custom field filtering |
 | `pb_entity_types` | List available entity types and field configurations |
 | `pb_refresh_config` | Force refresh of cached configuration |
 
@@ -76,7 +76,7 @@ The following type-specific tools have been consolidated into generic entity too
 
 ## Entity Types
 
-ProductBoard API v2 supports 9 entity types (verified 2025-12-15):
+ProductBoard API v2 (GA as of 2026; v1 is deprecated and sunsets 2026-07-08) supports 11 entity types:
 
 | Type | Creatable | Searchable |
 |------|-----------|------------|
@@ -85,12 +85,14 @@ ProductBoard API v2 supports 9 entity types (verified 2025-12-15):
 | component | Yes | No |
 | feature | Yes | Yes |
 | subfeature | Yes | Yes |
+| initiative | Yes | Yes |
+| keyResult | Yes | Yes |
 | releaseGroup | Yes | No |
 | release | Yes | No |
 | company | Yes | No |
 | user | **No** (read-only) | No |
 
-**NOTE**: `initiative` is NOT supported by ProductBoard API v2 (verified 2025-12-15)
+`initiative` and `keyResult` were added to the official surface as part of the GA release (March 2026 changelog). Earlier notes in this repo claimed `initiative` was unsupported — that is no longer true.
 
 ## Commands
 
@@ -169,6 +171,7 @@ claude mcp add --transport stdio productboard \
 - Config for single entity type returns object, not array
 - `pageSize` parameter is not supported (API returns 100 items/page)
 - Entity types per OpenAPI: product, component, feature, subfeature, initiative, objective, keyResult, release, releaseGroup
+- `GET /entities` accepts `type` as a single value (`?type=feature`) or as an array via repeated `type[]` params (`?type[]=feature&type[]=initiative`)
 
 ## Code Style
 
