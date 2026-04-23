@@ -232,7 +232,7 @@ async function getCustomFieldMapping(
         return { byId: new Map(), byName: new Map() };
       }
       // Fields can be object keyed by ID or array - buildCustomFieldMapping handles both
-      return buildCustomFieldMapping(configData.fields as unknown as Record<string, { id: string; name: string; schema?: string; options?: Array<{ id: string; name: string; color?: string }> }>);
+      return buildCustomFieldMapping(configData.fields as unknown as Parameters<typeof buildCustomFieldMapping>[0]);
     });
   } catch {
     // Config fetch failed - continue without custom field transformation

@@ -49,19 +49,33 @@ interface FieldValuesEnvelope {
   links?: { next?: string | null };
 }
 
+/**
+ * GA (March 2026) returns `schema` as a JSON Schema object instead of the old
+ * `"TextFieldValue"`-style string. We still accept the string form so legacy
+ * fixtures and transitional responses keep working.
+ */
+interface SchemaObject {
+  type?: string | string[];
+  format?: string;
+  enum?: unknown[];
+  properties?: Record<string, SchemaObject>;
+  items?: SchemaObject;
+  required?: string[];
+}
+
 interface RawApiField {
   id: string;
   name: string;
   path?: string;
-  schema?: string; // e.g., "RichTextFieldValue", "TextFieldValue", "NumberFieldValue"
+  schema?: string | SchemaObject;
   type?: string; // Legacy format support
   displayName?: string; // Legacy format support
   required?: boolean; // Legacy format support
   readOnly?: boolean; // Legacy format support
   lifecycle?: {
     create?: { set?: boolean };
-    update?: { set?: boolean; clear?: boolean };
-    patch?: { set?: boolean; clear?: boolean };
+    update?: { set?: boolean; clear?: boolean; addItems?: boolean; removeItems?: boolean };
+    patch?: { set?: boolean; clear?: boolean; addItems?: boolean; removeItems?: boolean };
   };
   constraints?: {
     required?: boolean;
@@ -144,14 +158,65 @@ export function extractFieldOptions(field: RawApiField): FieldValueItem[] | unde
 }
 
 /**
+ * Classify a GA-style JSON-Schema field object into our internal type label.
+ *
+ * The GA schema describes the value *shape* (plus occasional hints like enums
+ * or well-known properties), so we combine it with the field id and lifecycle
+ * to decide whether an `object` is a status, a member, a timeframe, etc.
+ */
+function classifyGaSchema(field: RawApiField, schema: SchemaObject): string {
+  const t = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+  const format = schema.format;
+  const enumVals = schema.enum;
+  const props = schema.properties;
+
+  const isMultiValued =
+    t === 'array' ||
+    field.lifecycle?.patch?.addItems === true ||
+    field.lifecycle?.update?.addItems === true;
+
+  if (t === 'array') return field.id === 'teams' || field.id === 'team' ? 'team' : 'multi_select';
+  if (t === 'boolean') return 'boolean';
+  if (t === 'number' || t === 'integer') return 'number';
+
+  if (t === 'string') {
+    if (Array.isArray(enumVals) && enumVals.length > 0) return 'single_select';
+    if (format === 'date') return 'date';
+    if (format === 'date-time') return 'datetime';
+    // Long-form strings are richtext (description field ships with maxLength 1048576).
+    if ((field.constraints?.maxLength ?? 0) > 10000) return 'richtext';
+    if (field.id === 'description') return 'richtext';
+    return 'text';
+  }
+
+  if (t === 'object' && props) {
+    if (props.startDate && props.endDate) return 'timeframe';
+    const statusEnum = props.status?.enum;
+    if (Array.isArray(statusEnum) && statusEnum.includes('onTrack')) return 'health';
+    const modeEnum = props.mode?.enum;
+    if (props.value && Array.isArray(modeEnum) && modeEnum.includes('statusBased')) return 'progress';
+    if (props.id && props.email) return 'member';
+    if (props.id && props.name) {
+      if (field.id === 'status') return 'status';
+      if (field.id === 'teams' || field.id === 'team') return 'team';
+      return isMultiValued ? 'multi_select' : 'single_select';
+    }
+  }
+
+  return 'unknown';
+}
+
+/**
  * Normalize a single field from API format to our format
  * Handles both actual API format (schema) and legacy type definition (type)
  */
 function normalizeField(field: RawApiField): NormalizedField {
-  // Determine type: prefer schema mapping, fall back to type property, then unknown
+  // Determine type: prefer schema (string legacy or GA object), fall back to type property.
   let type: string;
-  if (field.schema) {
+  if (typeof field.schema === 'string') {
     type = SCHEMA_TO_TYPE[field.schema] ?? field.schema.replace('FieldValue', '').toLowerCase();
+  } else if (field.schema && typeof field.schema === 'object') {
+    type = classifyGaSchema(field, field.schema);
   } else if (field.type) {
     type = field.type;
   } else {
