@@ -1,9 +1,10 @@
 /**
  * Unit tests for the ProductBoard client's query-param serialization.
  *
- * The GA API (March 2026 changelog) accepts `?type[]=feature&type[]=initiative`
- * for multi-type listing on `GET /entities`. This file mocks `fetch` so we can
- * inspect the request URL the client builds and assert the array notation.
+ * GA (March 2026) requires `?type[]=…` on `GET /entities` and rejects the
+ * scalar `?type=feature` form with HTTP 400. Both single- and multi-type
+ * listings therefore serialize as repeated `type[]=` entries; this file mocks
+ * `fetch` so we can inspect the request URL the client builds.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -30,15 +31,15 @@ describe('ProductBoardClient query parameter serialization', () => {
     vi.unstubAllGlobals();
   });
 
-  it('serializes a single entity type as ?type=feature', async () => {
+  it('serializes a single entity type as ?type[]=feature (GA-required array form)', async () => {
     const { capturedUrl } = mockFetchOnce();
     const client = new ProductBoardClient({ apiToken: 'test' });
     await client.listEntities('feature');
     const url = capturedUrl();
     expect(url).not.toBeNull();
     const parsed = new URL(url!);
-    expect(parsed.searchParams.get('type')).toBe('feature');
-    expect(parsed.searchParams.getAll('type[]')).toEqual([]);
+    expect(parsed.searchParams.getAll('type[]')).toEqual(['feature']);
+    expect(parsed.searchParams.get('type')).toBeNull();
   });
 
   it('serializes multiple entity types as repeated ?type[]= entries', async () => {
@@ -60,5 +61,20 @@ describe('ProductBoardClient query parameter serialization', () => {
     const parsed = new URL(capturedUrl()!);
     expect(parsed.searchParams.get('pageCursor')).toBe('abc123');
     expect(parsed.searchParams.getAll('type[]')).toEqual(['feature', 'objective']);
+  });
+
+  it('uses ?type[]= for listProducts/listComponents/listFeatures helpers', async () => {
+    const { capturedUrl } = mockFetchOnce();
+    const client = new ProductBoardClient({ apiToken: 'test' });
+    await client.listProducts();
+    expect(new URL(capturedUrl()!).searchParams.getAll('type[]')).toEqual(['product']);
+
+    const { capturedUrl: url2 } = mockFetchOnce();
+    await client.listComponents();
+    expect(new URL(url2()!).searchParams.getAll('type[]')).toEqual(['component']);
+
+    const { capturedUrl: url3 } = mockFetchOnce();
+    await client.listFeatures();
+    expect(new URL(url3()!).searchParams.getAll('type[]')).toEqual(['feature']);
   });
 });

@@ -18,8 +18,10 @@ import type {
 } from '../client/types.js';
 
 /**
- * Schema names from ProductBoard API mapped to our custom field types.
- * Only these schema types are considered custom fields.
+ * Legacy schema names (pre-GA) from ProductBoard API mapped to our custom
+ * field types. Kept for backward compatibility with older workspaces and
+ * fixtures; GA responses carry a JSON-Schema object instead and are classified
+ * by `classifyCustomFieldSchema` below.
  */
 const CUSTOM_FIELD_SCHEMAS: Record<string, CustomFieldType> = {
   NumberFieldValue: 'number',
@@ -32,6 +34,56 @@ const CUSTOM_FIELD_SCHEMAS: Record<string, CustomFieldType> = {
   DateFieldValue: 'date',
   DateTimeFieldValue: 'datetime',
 };
+
+/** Subset of JSON Schema we inspect to classify a custom field. */
+interface CustomFieldSchemaObject {
+  type?: string | string[];
+  format?: string;
+  enum?: unknown[];
+  properties?: Record<string, CustomFieldSchemaObject>;
+  items?: CustomFieldSchemaObject;
+}
+
+/**
+ * Classify a GA JSON-Schema field object into one of our CustomFieldType
+ * labels. Returns undefined for shapes we don't treat as custom fields
+ * (status, teams, health, progress, timeframe, parent, etc.).
+ */
+function classifyCustomFieldSchema(
+  field: RawFieldConfig,
+  schema: CustomFieldSchemaObject
+): CustomFieldType | undefined {
+  const t = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+  const format = schema.format;
+  const props = schema.properties;
+  const isMultiValued =
+    t === 'array' ||
+    field.lifecycle?.patch?.addItems === true ||
+    field.lifecycle?.update?.addItems === true;
+
+  if (t === 'boolean') return 'boolean';
+  if (t === 'number' || t === 'integer') return 'number';
+
+  if (t === 'string') {
+    if (format === 'date') return 'date';
+    if (format === 'date-time') return 'datetime';
+    if ((field.constraints?.maxLength ?? 0) > 10000) return 'richtext';
+    return 'text';
+  }
+
+  if (t === 'array' && schema.items?.properties?.id && schema.items?.properties?.name) {
+    return 'multi_select';
+  }
+
+  if (t === 'object' && props) {
+    if (props.id && props.email) return 'member';
+    if (props.id && props.name) {
+      return isMultiValued ? 'multi_select' : 'single_select';
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Standard fields that should NOT be treated as custom fields.
@@ -62,12 +114,21 @@ function isUUID(str: string): boolean {
 
 /**
  * Raw field definition from ProductBoard API configuration.
+ *
+ * `schema` may be a legacy string name (e.g. "NumberFieldValue") or a GA
+ * JSON-Schema object — both are handled by the classifier below.
  */
 interface RawFieldConfig {
   id: string;
   name: string;
-  schema?: string;
+  schema?: string | CustomFieldSchemaObject;
   options?: Array<{ id: string; name: string; color?: string }>;
+  values?: { data?: Array<{ id: string; name: string; color?: string }> };
+  constraints?: { maxLength?: number };
+  lifecycle?: {
+    update?: { addItems?: boolean };
+    patch?: { addItems?: boolean };
+  };
 }
 
 /**
@@ -102,10 +163,13 @@ export function buildCustomFieldMapping(
       continue;
     }
 
-    // Check if this is a recognized custom field schema
-    const fieldType = field.schema !== undefined && field.schema !== null && field.schema !== ''
-      ? CUSTOM_FIELD_SCHEMAS[field.schema]
-      : undefined;
+    // Classify either from legacy string schema or from GA JSON-Schema object.
+    let fieldType: CustomFieldType | undefined;
+    if (typeof field.schema === 'string' && field.schema !== '') {
+      fieldType = CUSTOM_FIELD_SCHEMAS[field.schema];
+    } else if (field.schema && typeof field.schema === 'object') {
+      fieldType = classifyCustomFieldSchema(field, field.schema);
+    }
     if (fieldType === undefined) {
       continue;
     }
@@ -117,9 +181,10 @@ export function buildCustomFieldMapping(
       type: fieldType,
     };
 
-    // Add options for select fields
-    if (field.options && field.options.length > 0) {
-      config.options = field.options.map((opt): SelectOption => ({
+    // Options may arrive as legacy `options: [...]` or GA `values.data: [...]`.
+    const rawOptions = field.options ?? field.values?.data;
+    if (rawOptions && rawOptions.length > 0) {
+      config.options = rawOptions.map((opt): SelectOption => ({
         id: opt.id,
         name: opt.name,
         color: opt.color,

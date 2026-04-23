@@ -183,7 +183,7 @@ export class ProductBoardClient {
   }): Promise<PaginatedResponse<Feature>> {
     return this.request<PaginatedResponse<Feature>>('GET', '/entities', {
       params: {
-        type: 'feature',
+        type: ['feature'],
         pageCursor: params?.pageCursor,
       },
     });
@@ -402,7 +402,7 @@ export class ProductBoardClient {
   }): Promise<PaginatedResponse<Component>> {
     return this.request<PaginatedResponse<Component>>('GET', '/entities', {
       params: {
-        type: 'component',
+        type: ['component'],
         'product.id': params?.productId,
         pageCursor: params?.pageCursor,
       },
@@ -419,7 +419,7 @@ export class ProductBoardClient {
   async listProducts(params?: { pageCursor?: string }): Promise<PaginatedResponse<Product>> {
     return this.request<PaginatedResponse<Product>>('GET', '/entities', {
       params: {
-        type: 'product',
+        type: ['product'],
         pageCursor: params?.pageCursor,
       },
     });
@@ -622,9 +622,10 @@ export class ProductBoardClient {
   /**
    * List entities of one or more types with pagination.
    *
-   * Pass a single `EntityType` for the classic `?type=feature` form, or an array
-   * of `EntityType` to use the GA `?type[]=feature&type[]=initiative` form
-   * (added in the ProductBoard March 2026 changelog).
+   * Serializes `type` as repeated `?type[]=feature&type[]=initiative` entries —
+   * GA (March 2026) rejects the scalar `?type=feature` form with HTTP 400
+   * ("Unable to parse JSON - Unrecognized token 'feature'"), so a single type
+   * is sent as a one-element array.
    *
    * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
    * It returns 100 items per page. Use pageCursor for subsequent pages.
@@ -635,12 +636,10 @@ export class ProductBoardClient {
       pageCursor?: string;
     }
   ): Promise<PaginatedResponse<GenericEntity>> {
-    const isArray = Array.isArray(entityTypeOrTypes);
+    const types = Array.isArray(entityTypeOrTypes) ? entityTypeOrTypes : [entityTypeOrTypes];
     return this.request<PaginatedResponse<GenericEntity>>('GET', '/entities', {
       params: {
-        ...(isArray
-          ? { 'type[]': entityTypeOrTypes }
-          : { type: entityTypeOrTypes }),
+        type: types,
         pageCursor: params?.pageCursor,
       },
     });
