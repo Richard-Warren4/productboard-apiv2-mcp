@@ -8,6 +8,8 @@
  * @module index
  */
 
+import { createRequire } from 'node:module';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -17,9 +19,25 @@ import { registerRelationshipTools } from './tools/relationships.js';
 import { registerConfigTools } from './tools/config.js';
 import { registerEntityTools } from './tools/entities.js';
 
+/**
+ * Read the package version so the version reported to MCP clients
+ * always matches package.json.
+ */
+function readPackageVersion(): string {
+  try {
+    // Resolved relative to dist/index.js, which sits alongside package.json
+    // both in this repo and in the published npm package.
+    const require = createRequire(import.meta.url);
+    const pkg = require('../package.json') as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 // Server metadata
 const SERVER_NAME = 'productboard-mcp';
-const SERVER_VERSION = '0.2.0';
+const SERVER_VERSION = readPackageVersion();
 
 /**
  * Main entry point for the MCP server
