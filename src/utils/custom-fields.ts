@@ -386,6 +386,78 @@ export interface CustomFieldFilterInput {
 }
 
 /**
+ * Custom field filters split into a server-side filter map and the residue
+ * that still has to be applied client-side.
+ */
+export interface PartitionedCustomFieldFilters {
+  /** Field ID → EntitySearchCustomFieldFilterValue, for filter.fields in the search body */
+  serverSide: Record<string, unknown>;
+  /** Filters the search endpoint cannot express; apply after fetching */
+  clientSide: CustomFieldFilterInput[];
+}
+
+/**
+ * Split custom field filters into server-side and client-side sets.
+ *
+ * The search endpoint can evaluate `=` on single-selects ({ name }),
+ * multi-selects ({ any: [{ name }] }), numbers ({ eq }) and dates ({ eq }).
+ * Everything else — `!=`, inequalities, text/boolean equality, and a second
+ * filter on a field already claimed server-side — stays client-side.
+ *
+ * @param filters - Validated filter inputs
+ * @param mapping - Custom field mapping from configuration
+ * @returns Server-side filter map keyed by field ID, plus the client-side residue
+ */
+export function partitionCustomFieldFilters(
+  filters: CustomFieldFilterInput[],
+  mapping: CustomFieldMapping
+): PartitionedCustomFieldFilters {
+  const serverSide: Record<string, unknown> = {};
+  const clientSide: CustomFieldFilterInput[] = [];
+
+  for (const filter of filters) {
+    const config = mapping.byName.get(filter.field.toLowerCase());
+    let serverValue: unknown;
+
+    if (config && filter.operator === '=' && !(config.id in serverSide)) {
+      switch (config.type) {
+        case 'single_select':
+        case 'multi_select': {
+          // The server matches option names exactly; resolve the user's value to
+          // the canonical option name to keep the case-insensitive behavior.
+          // An unknown option falls through to client-side (matches nothing,
+          // same as before).
+          const option = config.options?.find(
+            (o) => o.name.toLowerCase() === String(filter.value).toLowerCase()
+          );
+          if (option) {
+            serverValue =
+              config.type === 'single_select'
+                ? { name: option.name }
+                : { any: [{ name: option.name }] };
+          }
+          break;
+        }
+        case 'number':
+          if (typeof filter.value === 'number') serverValue = { eq: filter.value };
+          break;
+        case 'date':
+          if (typeof filter.value === 'string') serverValue = { eq: filter.value };
+          break;
+      }
+    }
+
+    if (config && serverValue !== undefined) {
+      serverSide[config.id] = serverValue;
+    } else {
+      clientSide.push(filter);
+    }
+  }
+
+  return { serverSide, clientSide };
+}
+
+/**
  * Result of filter validation
  */
 export interface FilterValidationResult {

@@ -268,12 +268,13 @@ export const CustomFieldFilterSchema = z.object({
  * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
  * It returns 100 items per page. Use pageCursor for subsequent pages.
  *
- * IMPORTANT: All filters are direct properties under `data`, NOT in a `filter` wrapper.
- * The official ProductBoard docs show a `filter` property but that does NOT work.
- * See CLAUDE.md and research.md for verified examples.
+ * The search request body uses the structured `filter` format from the v2
+ * OpenAPI spec: { data: { filter: { type, id, fields, relationships } } }
+ * (verified live 2026-07-30; the older flat-properties body is now rejected).
  *
- * Custom field filtering (customFieldFilters) is applied client-side after fetching
- * from the API, since ProductBoard doesn't support server-side custom field filtering.
+ * teams filters server-side via filter.fields.teams. customFieldFilters run
+ * server-side for '=' on select/number/date fields; other operators, text
+ * fields, and hasTeam are applied client-side after fetching all pages.
  */
 export const EntitySearchInputSchema = z.object({
   entityType: SearchableEntityTypeSchema.describe('Entity type to search (feature, subfeature, objective)'),
@@ -293,7 +294,15 @@ export const EntitySearchInputSchema = z.object({
   customFieldFilters: z
     .array(CustomFieldFilterSchema)
     .optional()
-    .describe('Client-side filters for custom field values (e.g., Reach >= 50)'),
+    .describe("Filters for custom field values (e.g., Reach >= 50). '=' on select/number/date fields runs server-side; the rest is applied client-side."),
+  teams: z
+    .array(z.string())
+    .optional()
+    .describe('Server-side filter by native workspace team names (e.g., ["H4C Mobile"]). Matches entities in ANY of the given teams. Names must exist in the workspace.'),
+  hasTeam: z
+    .boolean()
+    .optional()
+    .describe('Client-side filter by team presence: true = has at least one team, false = no team assigned'),
 });
 
 /**

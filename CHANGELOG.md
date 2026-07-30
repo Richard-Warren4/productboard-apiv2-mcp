@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`pb_entity_search` was completely broken** after Productboard changed `POST /entities/search` to require the structured `filter` request body. Every call failed with `Property is not allowed` validation errors because the client still sent filters as flat properties under `data` (the pre-GA workaround). `searchEntities`, `searchFeatures`, and `listSubfeatures` now send `{ data: { filter: { type, id, fields, relationships } } }` per the current v2 OpenAPI spec (verified live 2026-07-30). Renames handled: `statuses` → `fields.status`, `owners` → `fields.owner`, `parent` → `relationships.parent[]`, `archived`/`name` → under `fields`.
+
+### Changed
+- **Team filtering is now server-side**: `pb_entity_search`'s `teams` parameter maps to `filter.fields.teams` (OR semantics) instead of fetching all pages and filtering client-side. `hasTeam` remains client-side (the API has no presence filter for teams).
+- **Custom field filters run server-side where the API supports it**: `=` on single-select (`{name}`), multi-select (`{any: [{name}]}`), number (`{eq}`), and date (`{eq}`) fields is translated to `filter.fields.<fieldId>` in the search body, with option names canonicalized case-insensitively against the workspace config. Other operators (`!=`, inequalities) and text/boolean equality remain client-side, and only a client-side residue triggers the multi-page fetch.
+
 ## [1.1.0] - 2026-04-23
 
 ### Added

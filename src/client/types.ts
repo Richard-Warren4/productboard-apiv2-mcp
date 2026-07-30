@@ -317,9 +317,9 @@ export interface ListGenericEntitiesInput {
  * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
  * It returns 100 items per page. Use pageCursor for subsequent pages.
  *
- * IMPORTANT: All filters must be direct properties under `data`, NOT in a `filter` wrapper.
- * The official ProductBoard docs show a `filter` property but that does NOT work.
- * See research.md for verified examples.
+ * The search request body uses the structured `filter` format from the v2
+ * OpenAPI spec: { data: { filter: { type, id, fields, relationships } } }
+ * (verified live 2026-07-30; the older flat-properties body is now rejected).
  */
 export interface SearchGenericEntitiesInput {
   entityType: SearchableEntityType;
@@ -329,6 +329,8 @@ export interface SearchGenericEntitiesInput {
   parent?: { id: string };
   archived?: boolean;
   ids?: string[];
+  teams?: Array<{ id?: string; name?: string }>;
+  customFields?: Record<string, unknown>;
   pageCursor?: string;
 }
 

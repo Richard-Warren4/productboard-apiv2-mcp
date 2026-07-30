@@ -217,37 +217,71 @@ See `.specify/memory/constitution.md` for the authoritative reference.
 
 ### Search Entities (POST /entities/search)
 
-**CRITICAL** (verified 2025-12-15):
-- The official ProductBoard docs show a `filter` property but that does NOT work
-- All filters must be direct properties under `data`
+**CRITICAL** (re-verified live 2026-07-30 — the API changed):
+- The request body now REQUIRES the structured `filter` wrapper from the official docs/OpenAPI spec
+- The old flat-properties body (`{"data": {"type": ..., "statuses": ...}}`) is rejected with
+  `Property is not allowed` validation errors
 - `pageSize` query parameter is NOT supported - API always returns 100 items per page
 
-**Supported filter parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `type` | string | **Required**. Entity type to search (feature, subfeature, objective, initiative, keyResult, etc.) |
-| `name` | string | Text search (partial, case-insensitive) |
-| `statuses` | array | Filter by status: `[{"name": "In Progress"}, {"name": "At Risk"}]` |
-| `owners` | array | Filter by owner: `[{"email": "john@doe.com"}]` or `[{"id": "..."}]` |
-| `parent` | object | Filter by parent: `{"id": "uuid"}` |
-| `archived` | boolean | Filter by archived state |
-| `ids` | array | Filter by specific entity IDs: `["uuid1", "uuid2"]` |
+**Body format**: `{ "data": { "filter": { ... }, "return": { "fields": [...] } } }`
+
+**Supported filter properties**:
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | array | Entity types to search, e.g. `["feature"]`. Required for custom-field filters. |
+| `id` | array | Filter by specific entity IDs |
+| `fields.name` | string | Text search on name |
+| `fields.archived` | boolean | Filter by archived state |
+| `fields.status` | array | `[{"name": "In Progress"}, {"name": "At Risk"}]` (note: singular `status`) |
+| `fields.owner` | array | `[{"email": "john@doe.com"}]` or `[{"id": "..."}]` (singular `owner`) |
+| `fields.teams` | array | Native workspace teams, `[{"name": "H4C Mobile"}]` or by `id`. OR semantics. |
+| `fields.<fieldId>` | object | Custom field filter by field UUID — see below |
+| `relationships.parent` | array | `[{"id": "uuid"}]` |
+| `createdAt`/`updatedAt` | object | `{"from": ISO, "to": ISO}` date range |
 
 **Pagination**: Use `pageCursor` query parameter for pagination. API returns 100 items per page.
 
-**Example - Search features by status and owner**:
+**Example - Search features by status, owner and parent**:
 ```json
 {
   "data": {
-    "type": "feature",
-    "statuses": [{"name": "Upcoming"}],
-    "owners": [{"email": "john@doe.com"}, {"email": "jane@doe.com"}],
-    "parent": {"id": "318de52f-4e38-4c94-a550-a0d47a1f212e"}
+    "filter": {
+      "type": ["feature"],
+      "fields": {
+        "archived": false,
+        "status": [{"name": "Upcoming"}],
+        "owner": [{"email": "john@doe.com"}, {"email": "jane@doe.com"}]
+      },
+      "relationships": {"parent": [{"id": "318de52f-4e38-4c94-a550-a0d47a1f212e"}]}
+    },
+    "return": {"fields": ["name", "status", "owner"]}
   }
 }
 ```
 
-**Note**: Team filtering is NOT supported by the search endpoint. Use client-side filtering after fetching results.
+### Team Filtering (Server-Side)
+
+`pb_entity_search` passes `teams` server-side via `filter.fields.teams`:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `teams` | array | Native workspace team names. Matches entities in **any** of them (OR). Unknown names get a 422 `referenceNotFound` from the API. |
+| `hasTeam` | boolean | Client-side: `true` = has at least one team, `false` = none. Triggers the multi-page fetch. Useful for finding coverage gaps. |
+
+Note: native workspace teams (Settings → Teams) are distinct from any team-like custom field
+(e.g. a multi-select named "Eng Team") — filter the latter with `customFieldFilters`.
+
+```json
+{
+  "entityType": "feature",
+  "teams": ["H4C Mobile", "H4C Desktop"],
+  "statuses": [{"name": "In Progress"}]
+}
+```
+
+If a client-side filter triggers the multi-page fetch and the 50-page safety limit is hit,
+`filteringInfo.truncated` is `true` with a `warning` — results are incomplete and the search
+needs narrowing. Never report a truncated sweep as a full backlog.
 
 ### Custom Field Filtering (Client-Side)
 
@@ -268,7 +302,7 @@ Custom fields (e.g., DRICE scores: Reach, Impact, Confidence, Effort) are return
 }
 ```
 
-**Filtering by custom fields** (client-side, via `pb_entity_search`):
+**Filtering by custom fields** (via `pb_entity_search`):
 ```json
 {
   "entityType": "feature",
@@ -280,21 +314,25 @@ Custom fields (e.g., DRICE scores: Reach, Impact, Confidence, Effort) are return
 ```
 
 **Supported operators**:
-| Operator | Valid For | Description |
-|----------|-----------|-------------|
-| `=` | All types | Equal to value |
-| `!=` | All types | Not equal to value |
-| `<` | Number only | Less than |
-| `<=` | Number only | Less than or equal |
-| `>` | Number only | Greater than |
-| `>=` | Number only | Greater than or equal |
+| Operator | Valid For | Description | Where it runs |
+|----------|-----------|-------------|---------------|
+| `=` | All types | Equal to value | **Server-side** for single-select (`{name}`), multi-select (`{any: [{name}]}`), number (`{eq}`) and date (`{eq}`); client-side for text/boolean |
+| `!=` | All types | Not equal to value | Client-side |
+| `<` | Number only | Less than | Client-side |
+| `<=` | Number only | Less than or equal | Client-side |
+| `>` | Number only | Greater than | Client-side |
+| `>=` | Number only | Greater than or equal | Client-side |
+
+The API also supports `{all: [...]}` (AND) on multi-selects, `{contains}` on text and
+`{isSet}` presence checks — the raw formats are documented in the OpenAPI spec
+(`EntitySearchCustomFieldFilterValue`) if the tool ever needs to expose them.
 
 **Important notes**:
 - Field names are **case-insensitive** (e.g., "reach" matches "Reach")
-- Select fields match by **option name** (case-insensitive)
-- Filtering is done **client-side** after fetching all results
-- Multi-page fetch (up to 50 pages/5000 results) when filters are provided
-- Response includes `filteringInfo` with `totalBeforeFiltering`, `totalAfterFiltering`, `pagesFetched`
+- Select fields match by **option name** (case-insensitive client-side; the server match is exact)
+- Server-side filters are translated to `filter.fields.<fieldId>` in the search body
+- Only filters with a client-side residue (or `hasTeam`) trigger the multi-page fetch (up to 50 pages/5000 results)
+- When the multi-page fetch runs, the response includes `filteringInfo` with `totalBeforeFiltering`, `totalAfterFiltering`, `pagesFetched`
 - Invalid field names return error with "Did you mean?" suggestions
 
 ### Create Relationship (POST /entities/{id}/relationships)

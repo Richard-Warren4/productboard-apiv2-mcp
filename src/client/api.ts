@@ -247,12 +247,8 @@ export class ProductBoardClient {
   /**
    * Search features with optional filters
    *
-   * Uses the POST /entities/search endpoint.
-   * API expects: { data: { type, name?, statuses?, owners?, parent? } }
-   * (verified by live testing 2025-12-14 with ProductBoard examples)
-   *
-   * NOTE: The official docs show a `filter` property but that does NOT work.
-   * Filters are passed as direct properties in the data object.
+   * Uses the POST /entities/search endpoint with the structured `filter`
+   * request body (see searchEntities for the format).
    *
    * @example
    * // Search by name (partial, case-insensitive matching)
@@ -281,36 +277,9 @@ export class ProductBoardClient {
     parent?: { id: string };
     pageCursor?: string;
   }): Promise<PaginatedResponse<Feature>> {
-    const data: {
-      type: string;
-      name?: string;
-      statuses?: Array<{ name: string } | { id: string }>;
-      owners?: Array<{ email: string } | { id: string }>;
-      parent?: { id: string };
-    } = {
-      type: 'feature',
-    };
-
-    // Add optional filters
-    if (params?.name) {
-      data.name = params.name;
-    }
-    if (params?.statuses && params.statuses.length > 0) {
-      data.statuses = params.statuses;
-    }
-    if (params?.owners && params.owners.length > 0) {
-      data.owners = params.owners;
-    }
-    if (params?.parent) {
-      data.parent = params.parent;
-    }
-
-    return this.request<PaginatedResponse<Feature>>('POST', '/entities/search', {
-      body: { data },
-      params: {
-        pageCursor: params?.pageCursor,
-      },
-    });
+    return this.searchEntities('feature', params, {
+      pageCursor: params?.pageCursor,
+    }) as Promise<PaginatedResponse<Feature>>;
   }
 
   // ===========================================================================
@@ -327,17 +296,9 @@ export class ProductBoardClient {
     featureId: string,
     params?: { pageCursor?: string }
   ): Promise<PaginatedResponse<Subfeature>> {
-    return this.request<PaginatedResponse<Subfeature>>('POST', '/entities/search', {
-      body: {
-        data: {
-          type: 'subfeature',
-          parent: { id: featureId },
-        },
-      },
-      params: {
-        pageCursor: params?.pageCursor,
-      },
-    });
+    return this.searchEntities('subfeature', { parent: { id: featureId } }, params) as Promise<
+      PaginatedResponse<Subfeature>
+    >;
   }
 
   /**
@@ -648,18 +609,22 @@ export class ProductBoardClient {
   /**
    * Search entities with filters
    *
-   * Uses POST /entities/search endpoint.
-   * Supported for: feature, subfeature, objective
+   * Uses POST /entities/search with the structured request body:
+   *   { data: { filter: { type: [...], id: [...],
+   *                       fields: { name, archived, status, owner, teams, <customFieldId>: {...} },
+   *                       relationships: { parent: [{ id }] } } } }
+   * (per the v2 OpenAPI spec at developer.productboard.com/openapi/entities.yaml,
+   * verified live 2026-07-30 — the earlier flat-properties body is now rejected
+   * with "Property is not allowed").
    *
-   * NOTE: ProductBoard API v2 does NOT support pageSize parameter.
+   * NOTE: ProductBoard API v2 does NOT support a pageSize parameter.
    * It returns 100 items per page. Use pageCursor for subsequent pages.
    *
-   * IMPORTANT: All filters must be direct properties under `data`, NOT in a `filter` wrapper.
-   * The official ProductBoard docs show a `filter` property but that does NOT work.
-   * See CLAUDE.md and research.md for verified examples.
-   *
    * @param entityType - The type of entities to search
-   * @param filters - Search filters
+   * @param filters - Search filters. `teams` filters by native workspace team
+   *   (OR semantics). `customFields` is a map of custom field ID →
+   *   EntitySearchCustomFieldFilterValue (e.g. { any: [{ name: 'Mobile' }] }
+   *   for multi-selects, { eq: 100 } for numbers) applied server-side.
    * @param params - Pagination parameters (pageCursor only)
    */
   async searchEntities(
@@ -671,37 +636,48 @@ export class ProductBoardClient {
       parent?: { id: string };
       archived?: boolean;
       ids?: string[];
+      teams?: Array<{ id?: string; name?: string }>;
+      customFields?: Record<string, unknown>;
     },
     params?: {
       pageCursor?: string;
     }
   ): Promise<PaginatedResponse<GenericEntity>> {
-    const data: Record<string, unknown> = {
-      type: entityType,
-    };
-
-    // Add optional filters (all are direct properties under `data`, NOT in a filter wrapper)
+    const fields: Record<string, unknown> = {};
     if (filters?.name) {
-      data.name = filters.name;
-    }
-    if (filters?.statuses && filters.statuses.length > 0) {
-      data.statuses = filters.statuses;
-    }
-    if (filters?.owners && filters.owners.length > 0) {
-      data.owners = filters.owners;
-    }
-    if (filters?.parent) {
-      data.parent = filters.parent;
+      fields.name = filters.name;
     }
     if (filters?.archived !== undefined) {
-      data.archived = filters.archived;
+      fields.archived = filters.archived;
     }
+    if (filters?.statuses && filters.statuses.length > 0) {
+      fields.status = filters.statuses;
+    }
+    if (filters?.owners && filters.owners.length > 0) {
+      fields.owner = filters.owners;
+    }
+    if (filters?.teams && filters.teams.length > 0) {
+      fields.teams = filters.teams;
+    }
+    if (filters?.customFields) {
+      Object.assign(fields, filters.customFields);
+    }
+
+    const filter: Record<string, unknown> = {
+      type: [entityType],
+    };
     if (filters?.ids && filters.ids.length > 0) {
-      data.ids = filters.ids;
+      filter.id = filters.ids;
+    }
+    if (Object.keys(fields).length > 0) {
+      filter.fields = fields;
+    }
+    if (filters?.parent) {
+      filter.relationships = { parent: [filters.parent] };
     }
 
     return this.request<PaginatedResponse<GenericEntity>>('POST', '/entities/search', {
-      body: { data },
+      body: { data: { filter } },
       params: {
         pageCursor: params?.pageCursor,
       },

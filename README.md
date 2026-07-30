@@ -92,9 +92,21 @@ Restart Claude Desktop and ask: "List my ProductBoard features"
 | `pb_entity_get` | Get entity details by ID (auto-detects type) |
 | `pb_entity_update` | Update entity properties |
 | `pb_entity_list` | List entities of a type with pagination (`entityType` for one, `entityTypes` for multi-type via `type[]`) |
-| `pb_entity_search` | Search entities with filters (status, owner, parent, custom fields). Supported types: feature, subfeature, objective, initiative, keyResult |
+| `pb_entity_search` | Search entities with filters (status, owner, parent, team, custom fields). Supported types: feature, subfeature, objective, initiative, keyResult |
 | `pb_entity_types` | List available entity types and field configurations |
 | `pb_refresh_config` | Force refresh of cached configuration |
+
+**Filtering by team**: `pb_entity_search` filters by native workspace team server-side
+(`filter.fields.teams`, OR semantics — unknown team names are rejected by the API):
+
+```json
+{ "entityType": "feature", "teams": ["Mobile"], "statuses": [{"name": "In Progress"}] }
+```
+
+`hasTeam: false` finds entities with no team assigned; this presence check has no server-side
+equivalent, so it pages through results and filters client-side. If the 50-page safety limit is
+reached, `filteringInfo.truncated` flags that results are incomplete. Team-like custom fields
+(multi-selects) are filtered via `customFieldFilters` instead, which also runs server-side for `=`.
 
 ### Relationship Tools
 

@@ -39,8 +39,10 @@ import {
   transformFieldsForUpdate,
   validateCustomFieldFilters,
   applyCustomFieldFilters,
+  partitionCustomFieldFilters,
   type CustomFieldFilterInput,
 } from '../utils/custom-fields.js';
+import { applyTeamFilter, hasTeamFilter, getEntityTeams, type TeamFilterInput } from '../utils/teams.js';
 import { getSessionCached, clearSessionCache, normalizeFields } from './config.js';
 
 /**
@@ -660,10 +662,12 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
     'pb_entity_search',
     'Search ProductBoard entities with filters. ' +
       'Supported for: feature, subfeature, objective, initiative, keyResult. ' +
-      'Filters: name (partial), statuses, owners, parent, archived, ids. ' +
+      'Server-side filters: name (partial), statuses, owners, parent, archived, ids, teams ' +
+      '(native workspace teams, OR semantics; unknown team names are rejected by the API), and ' +
+      "customFieldFilters using '=' on single-select, multi-select, number and date fields. " +
       'Returns 100 items per page (API does not support custom page size). ' +
-      'NOTE: Team filtering is NOT supported - use client-side filtering after fetching. ' +
-      'Custom field filtering (customFieldFilters) is applied client-side after fetching.',
+      "Remaining customFieldFilters (text fields, '!=' and inequalities) and hasTeam are applied " +
+      'client-side after fetching all pages — combine with server-side filters to reduce paging.',
     {
       entityType: SearchableEntityTypeSchema.describe('Entity type to search (feature, subfeature, objective)'),
       name: z.string().optional().describe('Filter by name (partial, case-insensitive)'),
@@ -677,7 +681,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         field: z.string().describe('Custom field name'),
         operator: z.enum(['=', '!=', '<', '<=', '>', '>=']).describe('Comparison operator'),
         value: z.union([z.number(), z.string(), z.boolean()]).describe('Value to compare'),
-      })).optional().describe('Client-side filters for custom fields (e.g., Reach >= 50)'),
+      })).optional().describe("Filters for custom fields (e.g., Reach >= 50). '=' on select/number/date fields runs server-side; the rest is applied client-side."),
+      teams: z.array(z.string()).optional().describe('Server-side filter by native workspace team names (e.g., ["H4C Mobile"]). Matches entities in ANY of the given teams. Names must exist in the workspace.'),
+      hasTeam: z.boolean().optional().describe('Client-side filter by team presence: true = has at least one team, false = no team assigned'),
     },
     async (args) => {
       try {
@@ -703,7 +709,14 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           }
         }
 
-        // Build filters (all are direct properties under `data`, NOT in a filter wrapper)
+        // Split custom field filters into server-side (sent in filter.fields)
+        // and client-side residue
+        const { serverSide: serverSideCustomFilters, clientSide: clientSideCustomFilters } =
+          customFieldFilters !== undefined && customFieldFilters.length > 0 && customFieldMapping !== undefined
+            ? partitionCustomFieldFilters(customFieldFilters, customFieldMapping)
+            : { serverSide: {}, clientSide: customFieldFilters ?? [] };
+
+        // Build server-side filters
         const filters: {
           name?: string;
           statuses?: Array<{ name?: string; id?: string }>;
@@ -711,6 +724,8 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           parent?: { id: string };
           archived?: boolean;
           ids?: string[];
+          teams?: Array<{ name: string }>;
+          customFields?: Record<string, unknown>;
         } = {};
 
         if (input.name !== undefined && input.name !== '') filters.name = input.name;
@@ -719,14 +734,28 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         if (input.parent !== undefined) filters.parent = input.parent;
         if (input.archived !== undefined) filters.archived = input.archived;
         if (input.ids !== undefined && input.ids.length > 0) filters.ids = input.ids;
+        // Teams filter is server-side (filter.fields.teams, OR semantics)
+        if (input.teams !== undefined && input.teams.length > 0) {
+          filters.teams = input.teams.map((name) => ({ name }));
+        }
+        if (Object.keys(serverSideCustomFilters).length > 0) {
+          filters.customFields = serverSideCustomFilters;
+        }
 
-        // If custom field filters are provided, we need to fetch all pages
+        // hasTeam has no server-side equivalent and stays client-side
+        const teamFilter: TeamFilterInput = { hasTeam: input.hasTeam };
+        const teamFilterActive = hasTeamFilter(teamFilter);
+
+        // If any client-side filter remains, we need to fetch all pages
         let allEntities: GenericEntity[] = [];
         let pagesFetched = 0;
         let nextCursor: string | null = null;
         let hasMoreResults = false;
+        let pageCapReached = false;
 
-        if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
+        const needsAllPages = clientSideCustomFilters.length > 0 || teamFilterActive;
+
+        if (needsAllPages) {
           // Fetch all pages for client-side filtering
           let cursor: string | undefined = input.pageCursor;
           do {
@@ -737,6 +766,9 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
             pagesFetched++;
             cursor = extractCursor(response.links.next);
           } while (cursor !== undefined && cursor !== null && cursor !== '' && pagesFetched < 50); // Safety limit
+          // Hitting the page cap means the sweep is incomplete — surfaced as
+          // `truncated` in filteringInfo so partial results are never read as total.
+          pageCapReached = cursor !== undefined && cursor !== null && cursor !== '';
           // When filtering, we've fetched all matching results
           nextCursor = null;
           hasMoreResults = false;
@@ -753,14 +785,21 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
 
         const totalBeforeFiltering = allEntities.length;
 
+        // Apply team filters on raw entities, before formatting
+        const teamFilteredEntities = teamFilterActive
+          ? applyTeamFilter(allEntities, teamFilter)
+          : allEntities;
+
         // Format entities with custom fields
-        const formattedEntities = allEntities.map((e) => {
+        const formattedEntities = teamFilteredEntities.map((e) => {
+          const entityTeams = getEntityTeams(e);
           const formatted: Record<string, unknown> = {
             id: e.id,
             type: e.type,
             name: e.fields.name ?? 'Unnamed',
             status: e.fields.status?.name ?? 'No status',
             owner: e.fields.owner?.name ?? e.fields.owner?.email ?? 'Unassigned',
+            teams: entityTeams.length > 0 ? entityTeams.map((t) => t.name).join(', ') : 'No team',
             archived: e.fields.archived ?? false,
           };
 
@@ -775,14 +814,14 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
           return formatted;
         });
 
-        // Apply custom field filters
+        // Apply the client-side residue of custom field filters
         let filteredEntities = formattedEntities;
-        if (customFieldFilters !== undefined && customFieldFilters.length > 0 && customFieldMapping !== undefined) {
+        if (clientSideCustomFilters.length > 0 && customFieldMapping !== undefined) {
           // Type assertion needed because formattedEntities has Record<string, unknown> for customFields
           // but applyCustomFieldFilters expects Record<string, CustomFieldValue>
           filteredEntities = applyCustomFieldFilters(
             formattedEntities,
-            customFieldFilters,
+            clientSideCustomFilters,
             customFieldMapping
           );
         }
@@ -809,18 +848,28 @@ export function registerEntityTools(server: McpServer, client: ProductBoardClien
         if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
           appliedFilters.customFieldFilters = customFieldFilters;
         }
+        if (input.teams !== undefined && input.teams.length > 0) appliedFilters.teams = input.teams;
+        if (input.hasTeam !== undefined) appliedFilters.hasTeam = input.hasTeam;
 
         if (Object.keys(appliedFilters).length > 0) {
           result.appliedFilters = appliedFilters;
         }
 
-        // Add filtering info if custom field filters were applied
-        if (customFieldFilters !== undefined && customFieldFilters.length > 0) {
-          result.filteringInfo = {
+        // Add filtering info if any client-side filter was applied
+        if (needsAllPages) {
+          const filteringInfo: Record<string, unknown> = {
             totalBeforeFiltering,
             totalAfterFiltering,
             pagesFetched,
           };
+          if (pageCapReached) {
+            filteringInfo.truncated = true;
+            filteringInfo.warning =
+              `Stopped at the ${pagesFetched}-page safety limit; more entities matched the ` +
+              'server-side filters but were not fetched. Results are INCOMPLETE — narrow the ' +
+              'search with statuses, owners or parent and retry.';
+          }
+          result.filteringInfo = filteringInfo;
         }
 
         return toMcpSuccess(result);
