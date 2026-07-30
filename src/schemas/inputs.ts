@@ -67,6 +67,21 @@ export const ListProductsInputSchema = z.object({
 });
 
 // =============================================================================
+// Jira Integration Tool Input Schemas
+// =============================================================================
+
+export const ListJiraIntegrationsInputSchema = z.object({});
+
+export const GetJiraLinksInputSchema = z.object({
+  featureIds: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Optional: only return links for these Productboard feature/entity IDs. Omit to return every link in the workspace.'
+    ),
+});
+
+// =============================================================================
 // Generic Entity Tool Input Schemas
 // =============================================================================
 
@@ -329,6 +344,8 @@ export type RemoveRelationshipInput = z.infer<typeof RemoveRelationshipInputSche
 export type GetConfigInput = z.infer<typeof GetConfigInputSchema>;
 export type ListComponentsInput = z.infer<typeof ListComponentsInputSchema>;
 export type ListProductsInput = z.infer<typeof ListProductsInputSchema>;
+export type ListJiraIntegrationsInput = z.infer<typeof ListJiraIntegrationsInputSchema>;
+export type GetJiraLinksInput = z.infer<typeof GetJiraLinksInputSchema>;
 
 // Generic entity types
 export type EntityCreateInput = z.infer<typeof EntityCreateInputSchema>;

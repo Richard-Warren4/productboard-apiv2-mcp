@@ -27,7 +27,7 @@ dist/           # Compiled output (run `npm run build`)
 specs/          # Design documentation
 ```
 
-## MCP Tools Available (14 tools)
+## MCP Tools Available (16 tools)
 
 ### Entity Tools (7 tools)
 
@@ -57,6 +57,17 @@ specs/          # Design documentation
 | `pb_get_config` | Get entity field configuration |
 | `pb_list_products` | List products |
 | `pb_list_components` | List components |
+
+### Jira Integration Tools (2 tools)
+
+Read-only. Reads Productboard's native Jira integration link table directly — not a
+custom field. See "Jira Integrations" in `.specify/memory/productboard-v2api-ref-urls.md`
+for the verified endpoint shapes.
+
+| Tool | Description |
+|------|-------------|
+| `pb_list_jira_integrations` | List Jira integrations configured in the workspace (a workspace can have more than one) |
+| `pb_get_jira_links` | Get every Productboard feature <-> Jira issue link, across all integrations; join `featureId` against `pb_entity_search`/`pb_entity_get` results |
 
 ### Migration from Type-Specific Tools
 

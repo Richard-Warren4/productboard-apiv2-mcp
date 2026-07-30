@@ -18,6 +18,7 @@ import { ProductBoardError } from './client/errors.js';
 import { registerRelationshipTools } from './tools/relationships.js';
 import { registerConfigTools } from './tools/config.js';
 import { registerEntityTools } from './tools/entities.js';
+import { registerJiraTools } from './tools/jira.js';
 
 /**
  * Read the package version so the version reported to MCP clients
@@ -75,10 +76,11 @@ async function main(): Promise<void> {
     version: SERVER_VERSION,
   });
 
-  // Register all tools (consolidated to 14 tools)
+  // Register all tools (14 consolidated + 2 Jira integration tools)
   registerRelationshipTools(server, client);
   registerConfigTools(server, client);
   registerEntityTools(server, client);
+  registerJiraTools(server, client);
 
   // Connect to transport
   const transport = new StdioServerTransport();

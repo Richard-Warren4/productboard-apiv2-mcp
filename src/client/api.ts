@@ -22,6 +22,8 @@ import type {
   EntityType,
   WritableEntityType,
   SearchableEntityType,
+  JiraIntegration,
+  JiraIntegrationConnection,
 } from './types.js';
 import { ProductBoardError, handleApiError } from './errors.js';
 
@@ -491,6 +493,43 @@ export class ProductBoardClient {
     await this.request(
       'DELETE',
       `/entities/${entityId}/relationships/${relationshipType}/${targetId}`
+    );
+  }
+
+  // ===========================================================================
+  // Jira Integration Operations
+  //
+  // Verified live 2026-07-30 (see .specify/memory/productboard-v2api-ref-urls.md).
+  // Not covered by the generic /entities endpoints — Jira integrations and their
+  // feature<->issue connections live under their own /jira-integrations path.
+  // ===========================================================================
+
+  /**
+   * List Jira integrations configured in the workspace.
+   *
+   * A workspace can have more than one (e.g. a legacy integration from before a
+   * Jira site migration, alongside a current one) — always enumerate all of them
+   * rather than assuming a single integration.
+   */
+  async listJiraIntegrations(): Promise<PaginatedResponse<JiraIntegration>> {
+    return this.request<PaginatedResponse<JiraIntegration>>('GET', '/jira-integrations');
+  }
+
+  /**
+   * List Productboard entity <-> Jira issue connections for one integration.
+   *
+   * `data[].id` in the response is the Productboard feature/entity UUID — the API
+   * uses the entity ID as the connection's own ID, there is no separate connection
+   * identifier. Paginated the same way as /entities (cursor via `links.next`).
+   */
+  async listJiraIntegrationConnections(
+    integrationId: string,
+    params?: { pageCursor?: string }
+  ): Promise<PaginatedResponse<JiraIntegrationConnection>> {
+    return this.request<PaginatedResponse<JiraIntegrationConnection>>(
+      'GET',
+      `/jira-integrations/${integrationId}/connections`,
+      { params: { pageCursor: params?.pageCursor } }
     );
   }
 

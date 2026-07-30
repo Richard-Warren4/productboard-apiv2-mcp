@@ -507,6 +507,48 @@ export interface ConfigCache {
 }
 
 // =============================================================================
+// Jira Integration Types
+// =============================================================================
+
+/**
+ * A Jira integration configured in the workspace.
+ * A workspace can have more than one (e.g. a legacy integration from before a
+ * Jira site migration alongside a current one) — always enumerate all of them.
+ */
+export interface JiraIntegration {
+  id: string;
+  type: 'jiraIntegration';
+  createdAt: string;
+  fields: {
+    name: string;
+    integrationStatus: string;
+  };
+  links: {
+    self: string;
+    connections: string;
+    html?: string;
+  };
+}
+
+/**
+ * A single Productboard entity <-> Jira issue link.
+ *
+ * `id` is the Productboard feature/entity UUID (the API uses the entity ID as
+ * the connection's own ID — there is no separate connection identifier).
+ */
+export interface JiraIntegrationConnection {
+  id: string;
+  type: 'jiraIntegrationConnection';
+  fields: {
+    issueKey: string;
+    issueId: string;
+  };
+  links: {
+    self: string;
+  };
+}
+
+// =============================================================================
 // Relationship Types
 // =============================================================================
 

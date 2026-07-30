@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`pb_list_jira_integrations` and `pb_get_jira_links`**: read the real Productboard <-> Jira
+  link table via the native Jira integration API (`GET /jira-integrations`,
+  `GET /jira-integrations/{id}/connections`) rather than any custom field — the feature
+  schema has no field for this, so this was previously unreadable via the MCP. Sweeps every
+  configured integration in the workspace (a workspace can have more than one, e.g. a legacy
+  integration alongside a current one) and returns each link as `{featureId, issueKey,
+  issueId, integrationId, integrationName}`, joinable against `pb_entity_search` results.
+  Read-only. Endpoints verified live 2026-07-30 against the antimatter workspace; see
+  `.specify/memory/productboard-v2api-ref-urls.md`.
+
 ### Fixed
 - **`pb_entity_search` was completely broken** after Productboard changed `POST /entities/search` to require the structured `filter` request body. Every call failed with `Property is not allowed` validation errors because the client still sent filters as flat properties under `data` (the pre-GA workaround). `searchEntities`, `searchFeatures`, and `listSubfeatures` now send `{ data: { filter: { type, id, fields, relationships } } }` per the current v2 OpenAPI spec (verified live 2026-07-30). Renames handled: `statuses` → `fields.status`, `owners` → `fields.owner`, `parent` → `relationships.parent[]`, `archived`/`name` → under `fields`.
 
