@@ -11,8 +11,8 @@ import type { PaginatedResponse } from '../client/types.js';
 /**
  * Extract the page cursor from a "next" link URL
  */
-export function extractCursor(nextUrl: string | undefined): string | undefined {
-  if (!nextUrl) {
+export function extractCursor(nextUrl: string | null | undefined): string | undefined {
+  if (nextUrl === null || nextUrl === undefined || nextUrl === '') {
     return undefined;
   }
 
@@ -27,9 +27,12 @@ export function extractCursor(nextUrl: string | undefined): string | undefined {
 
 /**
  * Check if there are more pages available
+ *
+ * The API sends `links.next: null` on the last page (not a missing property),
+ * so null must be treated as "no more pages" too.
  */
 export function hasNextPage<T>(response: PaginatedResponse<T>): boolean {
-  return response.links.next !== undefined && response.links.next !== '';
+  return response.links.next != null && response.links.next !== '';
 }
 
 /**

@@ -342,7 +342,7 @@ export interface SearchGenericEntitiesInput {
 export interface PaginatedResponse<T> {
   data: T[];
   links: {
-    next?: string; // URL with cursor for next page
+    next?: string | null; // URL with cursor for next page; the API sends null on the last page
   };
 }
 
